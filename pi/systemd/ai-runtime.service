@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi AI Runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/ai-runtime
+EnvironmentFile=/opt/ai-runtime/.env
+ExecStart=/opt/ai-runtime/.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

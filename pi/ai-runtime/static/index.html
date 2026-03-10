@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vritti</title>
+  <link rel="icon" href="/vritti-symbol.png" type="image/png" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f12;
+      color: #e4e4e7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .header svg { width: 24px; height: 24px; opacity: 0.8; }
+    .header h1 { margin: 0; font-size: 1rem; font-weight: 600; }
+    .header .sub { font-size: 0.75rem; color: #71717a; margin-left: 0.25rem; }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .msg { max-width: 85%; }
+    .msg.user { align-self: flex-end; }
+    .msg.assistant { align-self: flex-start; }
+    .msg .bubble {
+      padding: 0.6rem 0.9rem;
+      border-radius: 1rem;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .msg.user .bubble { background: #3b82f6; color: #fff; }
+    .msg.assistant .bubble { background: #27272a; color: #e4e4e7; }
+    .msg .meta {
+      font-size: 0.7rem; color: #71717a; margin-top: 0.25rem;
+    }
+    .msg .meta span { margin-right: 0.5rem; }
+    .input-area {
+      padding: 1rem;
+      border-top: 1px solid #27272a;
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .input-area textarea {
+      flex: 1;
+      min-height: 44px;
+      max-height: 120px;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #3f3f46;
+      border-radius: 0.5rem;
+      background: #18181b;
+      color: #e4e4e7;
+      font: inherit;
+      resize: none;
+    }
+    .input-area textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .input-area button {
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 0.5rem;
+      background: #3b82f6;
+      color: #fff;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .input-area button:hover { background: #2563eb; }
+    .input-area button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error { color: #f87171; font-size: 0.85rem; margin-top: 0.25rem; }
+    .status { font-size: 0.7rem; color: #71717a; padding: 0 1rem 0.5rem; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <img src="/vritti-symbol.png" alt="Vritti" class="logo" />
+    <div>
+      <h1>Vritti</h1><span class="sub">Your AI assistant</span>
+    </div>
+  </header>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="status" id="status">Ready. Type a message and press Send.</div>
+
+  <div class="input-area">
+    <textarea id="prompt" placeholder="Ask anything… (English, Hindi, Hinglish)" rows="1"></textarea>
+    <button type="button" id="send">Send</button>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const promptEl = document.getElementById('prompt');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+
+    function setStatus(s) { statusEl.textContent = s; }
+    function addMessage(role, text, meta) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      let metaHtml = '';
+      if (meta && (meta.source || meta.fallback_used !== undefined)) {
+        metaHtml = '<div class="meta">';
+        if (meta.source) metaHtml += '<span>source: ' + meta.source + '</span>';
+        if (meta.fallback_used !== undefined) metaHtml += '<span>fallback: ' + (meta.fallback_used ? 'yes' : 'no') + '</span>';
+        metaHtml += '</div>';
+      }
+      div.innerHTML = '<div class="bubble">' + escapeHtml(text) + '</div>' + metaHtml;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    function escapeHtml(s) {
+      const p = document.createElement('p');
+      p.textContent = s;
+      return p.innerHTML;
+    }
+
+    async function send() {
+      const prompt = promptEl.value.trim();
+      if (!prompt) return;
+      promptEl.value = '';
+      addMessage('user', prompt);
+      sendBtn.disabled = true;
+      setStatus('Thinking…');
+
+      try {
+        const res = await fetch('/v1/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          addMessage('assistant', 'Error: ' + (data.detail || res.statusText), null);
+          setStatus('Error.');
+          return;
+        }
+        const answer = data.answer || (data.reason ? data.reason : '(no response)');
+        addMessage('assistant', answer, {
+          source: data.source,
+          fallback_used: data.fallback_used,
+        });
+        if (data.reason) setStatus(data.reason); else setStatus('Ready.');
+      } catch (e) {
+        addMessage('assistant', 'Network error: ' + e.message, null);
+        setStatus('Network error.');
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    promptEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+  </script>
+</body>
+</html>

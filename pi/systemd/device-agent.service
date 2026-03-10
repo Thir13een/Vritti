@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Device Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/device-agent
+EnvironmentFile=/opt/device-agent/.env
+ExecStart=/usr/bin/python3 /opt/device-agent/agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
