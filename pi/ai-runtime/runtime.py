@@ -185,6 +185,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
             "source": "error",
             "fallback_used": False,
             "reason": "empty local response",
+            "local_backend_used": None,
         }
 
     use_backup, reason = needs_fallback(prompt, draft)
