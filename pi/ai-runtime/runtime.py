@@ -31,7 +31,10 @@ def _post_json(
     try:
         with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
             body = resp.read().decode("utf-8")
-            return json.loads(body)
+            try:
+                return json.loads(body)
+            except (json.JSONDecodeError, ValueError) as exc:
+                raise RuntimeError(f"invalid JSON from {url}: {body[:200]}") from exc
     except urllib.error.HTTPError as exc:
         # Include at most a small slice of the body to avoid log spam.
         body = exc.read().decode("utf-8", errors="replace")[:300]
@@ -118,6 +121,8 @@ def gateway_fallback(cfg: RuntimeConfig, prompt: str, draft: str, reason: str) -
     headers = {"Content-Type": "application/json"}
     if cfg.gateway_device_token:
         headers["Authorization"] = f"Bearer {cfg.gateway_device_token}"
+    if cfg.device_id:
+        headers["x-device-id"] = cfg.device_id
 
     payload = {"prompt": prompt, "draft": draft, "reason": reason}
     data = _post_json(cfg.gateway_url, payload, headers, timeout_seconds=cfg.gateway_timeout_seconds)
@@ -128,6 +133,8 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
     prompt_preview = prompt[:160].replace("\n", " ")
     logger.info("generate called", extra={"prompt_preview": prompt_preview})
 
+    gateway_configured = bool(cfg.gateway_url and cfg.gateway_device_token)
+
     try:
         draft, local_backend_used = local_chat(cfg, prompt)
     except RuntimeError as exc:
@@ -135,11 +142,40 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
             "local backends failed",
             extra={"error": str(exc)},
         )
+        if gateway_configured:
+            reason = f"local backend error: {exc}"
+            try:
+                improved = gateway_fallback(cfg, prompt, "", reason)
+                if improved:
+                    logger.info(
+                        "serving gateway response after local failure",
+                        extra={"fallback_used": True, "fallback_reason": reason},
+                    )
+                    return {
+                        "answer": improved,
+                        "source": "gateway",
+                        "fallback_used": True,
+                        "reason": reason,
+                        "local_backend_used": None,
+                    }
+            except RuntimeError as gateway_exc:
+                logger.error(
+                    "gateway fallback failed after local failure",
+                    extra={"error": str(gateway_exc)},
+                )
+                return {
+                    "answer": "",
+                    "source": "error",
+                    "fallback_used": False,
+                    "reason": f"{reason}; gateway unavailable or failed: {gateway_exc}",
+                    "local_backend_used": None,
+                }
         return {
             "answer": "",
             "source": "error",
             "fallback_used": False,
             "reason": f"local backend error: {exc}",
+            "local_backend_used": None,
         }
 
     if not draft:
@@ -155,7 +191,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
     if cfg.force_fallback:
         use_backup = True
         reason = "forced fallback for testing"
-    elif cfg.always_use_gateway and cfg.gateway_url and cfg.gateway_device_token:
+    elif cfg.always_use_gateway and gateway_configured:
         use_backup = True
         reason = "Server polish (gateway configured)"
 

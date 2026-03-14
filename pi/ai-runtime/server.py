@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from config import RuntimeConfig
 from runtime import generate
@@ -14,7 +14,7 @@ cfg = RuntimeConfig.from_env()
 
 # API routes first so they take precedence over static files
 class ChatRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., max_length=50_000)
 
 
 @app.get("/health")

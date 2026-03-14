@@ -12,6 +12,7 @@ class RuntimeConfig:
     llamacpp_base: str = "http://127.0.0.1:8080"
     gateway_url: str = "http://127.0.0.1:9000/v1/fallback"
     gateway_device_token: str = ""
+    device_id: str = ""
     num_ctx: int = 1024
     # When True and gateway_url + gateway_device_token are set, every response is sent to the server for polish (9B). When False, server is only used if FORCE_FALLBACK=true.
     always_use_gateway: bool = True
@@ -28,6 +29,7 @@ class RuntimeConfig:
             llamacpp_base=os.getenv("LLAMACPP_BASE", "http://127.0.0.1:8080").strip(),
             gateway_url=os.getenv("GATEWAY_URL", "http://127.0.0.1:9000/v1/fallback").strip(),
             gateway_device_token=os.getenv("GATEWAY_DEVICE_TOKEN", "").strip(),
+            device_id=os.getenv("DEVICE_ID", "").strip(),
             num_ctx=int(os.getenv("NUM_CTX", "1024")),
             always_use_gateway=os.getenv("ALWAYS_USE_GATEWAY", "true").strip().lower() in ("1", "true", "yes"),
             force_fallback=os.getenv("FORCE_FALLBACK", "false").strip().lower() in ("1", "true", "yes"),

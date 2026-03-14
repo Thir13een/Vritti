@@ -174,7 +174,8 @@ ok "Copied Python files" "config.py, runtime.py, server.py"
 
 if [[ -d "${REPO_DIR}/ai-runtime/static" ]]; then
   doing "Copying chat UI static files"
-  cp -r "${REPO_DIR}/ai-runtime/static" /opt/ai-runtime/static
+  mkdir -p /opt/ai-runtime/static
+  cp -r "${REPO_DIR}/ai-runtime/static/." /opt/ai-runtime/static/
   ok "Static files copied" "local web chat UI"
 fi
 
@@ -247,25 +248,45 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
     REG_STATUS=$?
     set -e
     if [[ $REG_STATUS -ne 0 || -z "${TOKEN}" ]]; then
-      warn "Gateway registration failed, generating a local token instead"
-      TOKEN="$(generate_token)"
-      TOKEN_SOURCE="generated_local"
+      warn "Gateway registration failed; leaving gateway token unset"
+      TOKEN="replace_with_device_token"
+      TOKEN_SOURCE="registration_failed"
     else
       ok "Registered with gateway" "device_id: ${DEVICE_ID}"
       TOKEN_SOURCE="gateway"
     fi
   else
     info "No GATEWAY_REGISTER_URL or GATEWAY_BOOTSTRAP_SECRET configured"
-    doing "Generating local device token"
-    TOKEN="$(generate_token)"
-    TOKEN_SOURCE="generated_local"
+    TOKEN="replace_with_device_token"
+    TOKEN_SOURCE="not_configured"
   fi
 fi
 
 upsert_env "$RUNTIME_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
 upsert_env "$AGENT_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
+
+# Derive heartbeat URL from the runtime's GATEWAY_URL so both services
+# point at the same server without manual editing.
+GATEWAY_URL="$(get_env "$RUNTIME_ENV" "GATEWAY_URL" || true)"
+if [[ -n "${GATEWAY_URL}" && "${GATEWAY_URL}" != *"your-gateway-domain"* ]]; then
+  HEARTBEAT_URL="${GATEWAY_URL%/v1/fallback}/v1/device/heartbeat"
+  upsert_env "$AGENT_ENV" "GATEWAY_HEARTBEAT_URL" "$HEARTBEAT_URL"
+  info "Heartbeat URL synced: ${HEARTBEAT_URL}"
+fi
 ok "Device token saved" "source: ${TOKEN_SOURCE}"
-info "Token preview: ${BOLD}${TOKEN:0:16}${RST}${DIM}...${RST}"
+if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
+  info "Gateway token is currently unset"
+else
+  info "Token preview: ${BOLD}${TOKEN:0:16}${RST}${DIM}...${RST}"
+fi
+
+if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
+  upsert_env "$RUNTIME_ENV" "ALWAYS_USE_GATEWAY" "false"
+  ok "Gateway polish disabled" "ALWAYS_USE_GATEWAY=false until registration succeeds"
+else
+  upsert_env "$RUNTIME_ENV" "ALWAYS_USE_GATEWAY" "true"
+  ok "Gateway polish enabled" "ALWAYS_USE_GATEWAY=true"
+fi
 
 # ── Step 5: systemd services ────────────────────────────────────────────────
 step_header 5 "Installing systemd services"
@@ -273,12 +294,21 @@ info "Systemd will manage both services so they start automatically on boot"
 info "and restart if they crash."
 echo ""
 
+# Detect the real (non-root) user who invoked the installer.
+PI_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
+if ! id "$PI_USER" &>/dev/null; then
+  PI_USER="pi"
+fi
+info "Services will run as user: ${BOLD}${PI_USER}${RST}"
+
 doing "Copying ai-runtime.service"
-cp "${REPO_DIR}/systemd/ai-runtime.service" /etc/systemd/system/ai-runtime.service
+sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/ai-runtime.service" \
+  > /etc/systemd/system/ai-runtime.service
 ok "ai-runtime.service installed" "/etc/systemd/system/"
 
 doing "Copying device-agent.service"
-cp "${REPO_DIR}/systemd/device-agent.service" /etc/systemd/system/device-agent.service
+sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/device-agent.service" \
+  > /etc/systemd/system/device-agent.service
 ok "device-agent.service installed" "/etc/systemd/system/"
 
 # ── Step 6: Enable & start services ─────────────────────────────────────────
@@ -338,18 +368,22 @@ echo ""
 section_box "Device Token" "$BLUE"
 echo ""
 result_line "Source:" "${TOKEN_SOURCE}"
-result_line "Token:" "${TOKEN:0:16}..."
+if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
+  result_line "Token:" "not issued"
+else
+  result_line "Token:" "${TOKEN:0:16}..."
+fi
 echo ""
-if [[ "${TOKEN_SOURCE}" == generated_local* ]]; then
-  warn "Local token generated. To connect to the server, configure:"
+if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
+  warn "Gateway token not issued yet. To connect this Pi to the server:"
   echo ""
   cmd "Edit /opt/ai-runtime/.env:"
   echo "       ${DIM}GATEWAY_URL=http://<server-ip>:9000/v1/fallback${RST}"
   echo "       ${DIM}GATEWAY_REGISTER_URL=http://<server-ip>:9000/v1/device/register${RST}"
   echo "       ${DIM}GATEWAY_BOOTSTRAP_SECRET=<DEVICE_REGISTER_SECRET from server .env>${RST}"
   echo ""
-  cmd "Then re-run this installer or restart:"
-  cmd "sudo systemctl restart ai-runtime device-agent"
+  cmd "Then re-run this installer:"
+  cmd "sudo bash pi/installer/install.sh"
   echo ""
 fi
 

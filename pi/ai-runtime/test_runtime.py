@@ -38,6 +38,51 @@ def test_generate_returns_error_when_local_backends_fail(monkeypatch):
     assert out["source"] == "error"
     assert out["fallback_used"] is False
     assert "local backend error" in out["reason"]
+    assert out["local_backend_used"] is None
+
+
+def test_generate_uses_gateway_when_local_backends_fail_and_gateway_is_configured(monkeypatch):
+    cfg = _cfg(gateway_url="http://server/v1/fallback", gateway_device_token="secret")
+
+    def failing_local_chat(_cfg, _prompt):
+        raise RuntimeError("boom")
+
+    def fake_gateway_fallback(_cfg, prompt, draft, reason):
+        assert prompt == "hello"
+        assert draft == ""
+        assert "local backend error: boom" in reason
+        return "gateway answer"
+
+    monkeypatch.setattr("runtime.local_chat", failing_local_chat)
+    monkeypatch.setattr("runtime.gateway_fallback", fake_gateway_fallback)
+
+    out = generate(cfg, "hello")
+    assert out["answer"] == "gateway answer"
+    assert out["source"] == "gateway"
+    assert out["fallback_used"] is True
+    assert "local backend error: boom" in out["reason"]
+    assert out["local_backend_used"] is None
+
+
+def test_generate_returns_error_when_local_and_gateway_fail(monkeypatch):
+    cfg = _cfg(gateway_url="http://server/v1/fallback", gateway_device_token="secret")
+
+    def failing_local_chat(_cfg, _prompt):
+        raise RuntimeError("boom")
+
+    def failing_gateway_fallback(_cfg, _prompt, _draft, _reason):
+        raise RuntimeError("gateway down")
+
+    monkeypatch.setattr("runtime.local_chat", failing_local_chat)
+    monkeypatch.setattr("runtime.gateway_fallback", failing_gateway_fallback)
+
+    out = generate(cfg, "hello")
+    assert out["answer"] == ""
+    assert out["source"] == "error"
+    assert out["fallback_used"] is False
+    assert "local backend error: boom" in out["reason"]
+    assert "gateway unavailable or failed: gateway down" in out["reason"]
+    assert out["local_backend_used"] is None
 
 
 def test_generate_uses_gateway_when_needed(monkeypatch):
@@ -110,4 +155,3 @@ def test_generate_falls_back_to_local_when_gateway_fails(monkeypatch):
     assert out["source"] == "local"
     assert out["fallback_used"] is False
     assert "gateway unavailable or failed" in out["reason"]
-
