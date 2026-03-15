@@ -22,6 +22,9 @@ class RuntimeConfig:
 
     @staticmethod
     def from_env() -> "RuntimeConfig":
+        num_ctx = max(1, int(os.getenv("NUM_CTX", "1024")))
+        local_timeout = max(1, int(os.getenv("LOCAL_TIMEOUT_SECONDS", "60")))
+        gateway_timeout = max(1, int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "30")))
         return RuntimeConfig(
             local_backend=os.getenv("LOCAL_BACKEND", "llamacpp").strip().lower(),
             local_model=os.getenv("LOCAL_MODEL", "qwen3.5:2b").strip(),
@@ -30,9 +33,9 @@ class RuntimeConfig:
             gateway_url=os.getenv("GATEWAY_URL", "http://127.0.0.1:9000/v1/fallback").strip(),
             gateway_device_token=os.getenv("GATEWAY_DEVICE_TOKEN", "").strip(),
             device_id=os.getenv("DEVICE_ID", "").strip(),
-            num_ctx=int(os.getenv("NUM_CTX", "1024")),
+            num_ctx=num_ctx,
             always_use_gateway=os.getenv("ALWAYS_USE_GATEWAY", "true").strip().lower() in ("1", "true", "yes"),
             force_fallback=os.getenv("FORCE_FALLBACK", "false").strip().lower() in ("1", "true", "yes"),
-            local_timeout_seconds=int(os.getenv("LOCAL_TIMEOUT_SECONDS", "60")),
-            gateway_timeout_seconds=int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "30")),
+            local_timeout_seconds=local_timeout,
+            gateway_timeout_seconds=gateway_timeout,
         )

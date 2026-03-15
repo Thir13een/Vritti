@@ -38,9 +38,25 @@ def post_heartbeat() -> None:
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=15):
-        logger.debug("heartbeat sent", extra={"device_id": DEVICE_ID})
-        return
+    try:
+        with urllib.request.urlopen(req, timeout=15):
+            logger.debug("heartbeat sent", extra={"device_id": DEVICE_ID})
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:300]
+        logger.warning(
+            "heartbeat request failed",
+            extra={"device_id": DEVICE_ID, "status_code": exc.code, "body": body},
+        )
+    except urllib.error.URLError as exc:
+        logger.warning(
+            "heartbeat network error",
+            extra={"device_id": DEVICE_ID, "error": str(exc)},
+        )
+    except Exception as exc:
+        logger.warning(
+            "heartbeat unexpected error",
+            extra={"device_id": DEVICE_ID, "error": str(exc)},
+        )
 
 
 def main() -> int:
@@ -49,19 +65,7 @@ def main() -> int:
         extra={"device_id": DEVICE_ID, "interval_seconds": INTERVAL_SECONDS},
     )
     while True:
-        try:
-            post_heartbeat()
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:300]
-            logger.warning(
-                "heartbeat request failed",
-                extra={"device_id": DEVICE_ID, "status_code": exc.code, "body": body},
-            )
-        except urllib.error.URLError as exc:
-            logger.warning(
-                "heartbeat network error",
-                extra={"device_id": DEVICE_ID, "error": str(exc)},
-            )
+        post_heartbeat()
         time.sleep(INTERVAL_SECONDS)
 
 

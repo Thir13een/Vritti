@@ -6,7 +6,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -17,6 +18,16 @@ app = FastAPI(title="Pi AI Runtime", version="0.1.0")
 cfg = RuntimeConfig.from_env()
 
 CHAT_TOKEN = os.getenv("CHAT_API_TOKEN", "").strip()
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 class ChatRequest(BaseModel):
@@ -32,7 +43,7 @@ def health() -> dict:
         else:
             urllib.request.urlopen(f"{cfg.ollama_base}/api/tags", timeout=3)
         result["backend"] = "reachable"
-    except Exception:
+    except (urllib.error.URLError, OSError, ValueError):
         result["status"] = "degraded"
         result["backend"] = "unreachable"
     return result

@@ -12,5 +12,13 @@ ExecStart=/usr/bin/python3 /opt/device-agent/agent.py
 Restart=always
 RestartSec=5
 
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/device-agent
+MemoryMax=128M
+
 [Install]
 WantedBy=multi-user.target
