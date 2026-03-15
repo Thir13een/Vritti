@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# ╔═══════════════════════════════════════════════════════════════════════════╗
-# ║  Vritti Pi Installer                                                    ║
-# ║  Sets up ai-runtime + device-agent + systemd on Raspberry Pi.           ║
-# ║                                                                         ║
-# ║  Usage:  sudo bash pi/installer/install.sh                              ║
-# ╚═══════════════════════════════════════════════════════════════════════════╝
+# Vritti Pi Installer
+# Usage: sudo bash pi/installer/install.sh
 set -euo pipefail
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -19,7 +15,7 @@ AGENT_ENV="/opt/device-agent/.env"
 TOTAL_STEPS=8
 SECONDS=0
 
-# ── Color & formatting ───────────────────────────────────────────────────────
+# Colors
 if [[ -t 1 ]] && command -v tput &>/dev/null && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 256 ]]; then
   RST="$(tput sgr0)"  BOLD="$(tput bold)"  DIM="$(tput dim)"  UL="$(tput smul)"
   SAFFRON="$(tput setaf 208)"
@@ -51,7 +47,7 @@ else
   BG_SAFFRON="" BG_GREEN=""
 fi
 
-# ── Output helpers ────────────────────────────────────────────────────────────
+# Output helpers
 divider()    { echo "${SAFFRON_DARK}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RST}"; }
 step_header() {
   local n="$1" title="$2"
@@ -93,7 +89,7 @@ section_box() {
 
 result_line() { printf "  ${BOLD}${SAFFRON}  %-18s${RST} %s\n" "$1" "$2"; }
 
-# ── Utility functions ─────────────────────────────────────────────────────────
+# Utility functions
 generate_token() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 32
@@ -137,9 +133,7 @@ print((data.get("device_token") or "").strip())
 PY
 }
 
-# ══════════════════════════════════════════════════════════════════════════════
-#   START
-# ══════════════════════════════════════════════════════════════════════════════
+# Start
 
 echo ""
 echo "${BOLD}${SAFFRON}"
@@ -162,9 +156,9 @@ info "Source directory : ${BOLD}${WHITE}${REPO_DIR}${RST}"
 info "Hostname         : ${BOLD}${WHITE}$(hostname)${RST}"
 info "Time             : $(date '+%Y-%m-%d %H:%M:%S')"
 
-# ── Step 1: System packages ──────────────────────────────────────────────────
+# Step 1: System packages
 step_header 1 "Installing system packages"
-info "Getting the basics: Python, pip, curl."
+info "Installing Python, pip, curl."
 echo ""
 
 doing "Updating package lists"
@@ -178,9 +172,9 @@ ok "System packages installed"
 info "Python version: ${BOLD}$(python3 --version 2>/dev/null)${RST}"
 step_done
 
-# ── Step 2: Model selection ────────────────────────────────────────────────
+# Step 2: Model selection
 step_header 2 "Choose AI model"
-info "Pick the model that best fits your Pi's hardware."
+info "Select model for your Pi's hardware."
 echo ""
 echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
 echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
@@ -201,7 +195,7 @@ echo "  ${BOLD}${SAFFRON}│${RST}                                              
 echo "  ${BOLD}${SAFFRON}╰─────────────────────────────────────────────────────────────╯${RST}"
 echo ""
 
-# Detect available RAM to suggest a default
+# Auto-suggest based on RAM
 TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)
 if [[ "$TOTAL_RAM_MB" -ge 3500 ]]; then
   SUGGESTED=2
@@ -226,10 +220,9 @@ done
 ok "Model selected" "${SELECTED_MODEL}"
 step_done
 
-# ── Step 3: ai-runtime ──────────────────────────────────────────────────────
+# Step 3: ai-runtime
 step_header 3 "Installing ai-runtime"
-info "This is the core AI service. It runs ${BOLD}${WHITE}${SELECTED_MODEL}${RST}${CREAM} locally and"
-info "handles chat requests on port 8000."
+info "Core AI service running ${BOLD}${WHITE}${SELECTED_MODEL}${RST}${CREAM} on port 8000."
 echo ""
 
 doing "Creating /opt/ai-runtime"
@@ -270,10 +263,9 @@ upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
 ok "Model configured" "LOCAL_MODEL=${SELECTED_MODEL}"
 step_done
 
-# ── Step 4: device-agent ─────────────────────────────────────────────────────
+# Step 4: device-agent
 step_header 4 "Installing device-agent"
-info "The device agent sends a heartbeat to the server every 60 seconds"
-info "so the admin dashboard knows this Pi is online."
+info "Heartbeat agent for gateway connectivity."
 echo ""
 
 doing "Creating /opt/device-agent"
@@ -292,10 +284,9 @@ else
 fi
 step_done
 
-# ── Step 5: Device registration & token ──────────────────────────────────────
+# Step 5: Device registration
 step_header 5 "Device registration & token"
-info "Each Pi needs a unique token to talk to the server. If the gateway"
-info "is reachable, we'll register automatically and get one."
+info "Registering with gateway to get a device token."
 echo ""
 
 TOKEN="$(get_env "$RUNTIME_ENV" "GATEWAY_DEVICE_TOKEN" || true)"
@@ -339,8 +330,7 @@ fi
 upsert_env "$RUNTIME_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
 upsert_env "$AGENT_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
 
-# Derive heartbeat URL from the runtime's GATEWAY_URL so both services
-# point at the same server without manual editing.
+# Derive heartbeat URL from GATEWAY_URL
 GATEWAY_URL="$(get_env "$RUNTIME_ENV" "GATEWAY_URL" || true)"
 if [[ -n "${GATEWAY_URL}" && "${GATEWAY_URL}" != *"your-gateway-domain"* ]]; then
   HEARTBEAT_URL="${GATEWAY_URL%/v1/fallback}/v1/device/heartbeat"
@@ -363,13 +353,12 @@ else
 fi
 step_done
 
-# ── Step 6: systemd services ────────────────────────────────────────────────
+# Step 6: systemd
 step_header 6 "Installing systemd services"
-info "Systemd will manage both services so they start automatically on boot"
-info "and restart if they crash."
+info "Auto-start on boot, auto-restart on crash."
 echo ""
 
-# Detect the real (non-root) user who invoked the installer.
+# Detect non-root user
 PI_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
 if ! id "$PI_USER" &>/dev/null; then
   PI_USER="pi"
@@ -387,9 +376,9 @@ sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/device-agent.service" \
 ok "device-agent.service installed" "/etc/systemd/system/"
 step_done
 
-# ── Step 7: Enable & start services ─────────────────────────────────────────
+# Step 7: Start services
 step_header 7 "Enabling and starting services"
-info "Starting everything up and making sure it survives reboots."
+info "Starting services."
 echo ""
 
 doing "Reloading systemd daemon"
@@ -419,7 +408,7 @@ else
 fi
 step_done
 
-# ── Step 8: Summary ─────────────────────────────────────────────────────────
+# Step 8: Summary
 step_header 8 "Installation complete"
 
 ELAPSED=$SECONDS

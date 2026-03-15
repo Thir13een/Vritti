@@ -14,7 +14,7 @@ class RuntimeConfig:
     gateway_device_token: str = ""
     device_id: str = ""
     num_ctx: int = 1024
-    # When True and gateway_url + gateway_device_token are set, every response is sent to the gateway for polish via Sarvam/OpenRouter API. When False, server is only used if FORCE_FALLBACK=true.
+    # Send every response to gateway for API polish
     always_use_gateway: bool = True
     max_tokens: int = 512
     force_fallback: bool = False

@@ -58,7 +58,7 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
     return generate(cfg, req.prompt.strip())
 
 
-# Serve chat UI at / (must be after API routes)
+# Serve chat UI
 static_dir = Path(__file__).resolve().parent / "static"
 if static_dir.exists():
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")

@@ -200,7 +200,7 @@ def test_generate_uses_gateway_when_local_backends_fail_and_gateway_is_configure
     def fake_gateway_fallback(_cfg, prompt, draft, reason):
         assert prompt == "hello"
         assert draft == ""
-        assert "local backend error: boom" in reason
+        assert reason == "local model unavailable"
         return "gateway answer"
 
     monkeypatch.setattr("runtime.local_chat", failing_local_chat)
@@ -210,7 +210,7 @@ def test_generate_uses_gateway_when_local_backends_fail_and_gateway_is_configure
     assert out["answer"] == "gateway answer"
     assert out["source"] == "gateway"
     assert out["api_polished"] is True
-    assert "local backend error: boom" in out["reason"]
+    assert out["reason"] == "local model unavailable"
     assert out["local_backend_used"] is None
 
 
@@ -230,7 +230,7 @@ def test_generate_returns_error_when_local_and_gateway_fail(monkeypatch):
     assert out["answer"] == ""
     assert out["source"] == "error"
     assert out["api_polished"] is False
-    assert "local backend error: boom" in out["reason"]
+    assert "local model unavailable" in out["reason"]
     assert "gateway unavailable or failed: gateway down" in out["reason"]
     assert out["local_backend_used"] is None
 

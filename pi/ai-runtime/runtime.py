@@ -12,7 +12,7 @@ logger = logging.getLogger("ai_runtime")
 
 
 def needs_fallback(prompt: str, draft: str) -> tuple[bool, str]:
-    """No heuristic-based fallback. Use ALWAYS_USE_GATEWAY=true (default) with gateway configured to polish every response on the server, or FORCE_FALLBACK=true for testing."""
+    """Stub — polishing is handled by ALWAYS_USE_GATEWAY or FORCE_FALLBACK."""
     return False, ""
 
 
@@ -36,7 +36,6 @@ def _post_json(
             except (json.JSONDecodeError, ValueError) as exc:
                 raise RuntimeError(f"invalid JSON from {url}: {body[:200]}") from exc
     except urllib.error.HTTPError as exc:
-        # Include at most a small slice of the body to avoid log spam.
         body = exc.read().decode("utf-8", errors="replace")[:300]
         raise RuntimeError(f"http {exc.code} from {url}: {body}") from exc
     except urllib.error.URLError as exc:
@@ -92,7 +91,6 @@ def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
             return _chat_with_ollama(cfg, messages)
         raise RuntimeError(f"unsupported backend: {name}")
 
-    # Requested behavior: primary llama.cpp, fallback Ollama on local failure.
     primary = "llamacpp"
     secondary = "ollama"
     if cfg.local_backend in ("llamacpp", "ollama"):
