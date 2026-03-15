@@ -50,7 +50,7 @@ def _chat_with_llamacpp(cfg: RuntimeConfig, messages: list[dict[str, str]]) -> s
             "model": cfg.local_model,
             "messages": messages,
             "temperature": 0.6,
-            "max_tokens": 256,
+            "max_tokens": cfg.max_tokens,
         },
         timeout_seconds=cfg.local_timeout_seconds,
     )
