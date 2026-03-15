@@ -143,7 +143,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
             extra={"error": str(exc)},
         )
         if gateway_configured:
-            reason = f"local backend error: {exc}"
+            reason = "local model unavailable"
             try:
                 improved = gateway_fallback(cfg, prompt, "", reason)
                 if improved:
