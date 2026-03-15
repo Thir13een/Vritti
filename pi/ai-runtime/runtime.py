@@ -194,7 +194,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
         reason = "forced fallback for testing"
     elif cfg.always_use_gateway and gateway_configured:
         use_backup = True
-        reason = "Server polish (gateway configured)"
+        reason = "API polish via gateway (Sarvam/OpenRouter)"
 
     if not use_backup:
         logger.info(
