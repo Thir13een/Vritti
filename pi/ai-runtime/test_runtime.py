@@ -1,9 +1,7 @@
-import json
-
 import pytest
 
 from config import RuntimeConfig
-from runtime import needs_fallback, generate, local_chat, gateway_fallback, _post_json
+from runtime import generate, local_chat, gateway_chat
 
 
 def _cfg(**overrides):
@@ -13,25 +11,7 @@ def _cfg(**overrides):
     return base
 
 
-# ── needs_fallback ──────────────────────────────────────────────────────────
-
-
-def test_needs_fallback_never_auto_triggers():
-    """Fallback is disabled by default; only FORCE_FALLBACK can trigger it."""
-    needs, reason = needs_fallback("Please answer in Hindi", "Here is your answer in English only.")
-    assert needs is False
-    assert reason == ""
-
-
-def test_needs_fallback_false_for_any_prompt_draft():
-    prompt = "Tell me a joke in English"
-    draft = "Here is a short joke in English."
-    needs, reason = needs_fallback(prompt, draft)
-    assert needs is False
-    assert reason == ""
-
-
-# ── local_chat ──────────────────────────────────────────────────────────────
+# ── local_chat ─────────────────────────────────────────────────────────────
 
 
 def test_local_chat_primary_succeeds(monkeypatch):
@@ -114,12 +94,12 @@ def test_local_chat_ollama_primary_uses_llamacpp_secondary(monkeypatch):
     assert backend == "llamacpp"
 
 
-# ── gateway_fallback ────────────────────────────────────────────────────────
+# ── gateway_chat ───────────────────────────────────────────────────────────
 
 
-def test_gateway_fallback_sends_correct_headers(monkeypatch):
+def test_gateway_chat_sends_correct_headers(monkeypatch):
     cfg = _cfg(
-        gateway_url="http://server/v1/fallback",
+        gateway_url="http://server/v1/chat",
         gateway_device_token="secret-token",
         device_id="pi-01",
     )
@@ -129,25 +109,20 @@ def test_gateway_fallback_sends_correct_headers(monkeypatch):
         captured["url"] = url
         captured["headers"] = headers
         captured["payload"] = payload
-        return {"answer": "polished"}
+        return {"answer": "response"}
 
     monkeypatch.setattr("runtime._post_json", fake_post_json)
 
-    result = gateway_fallback(cfg, "prompt", "draft", "reason")
-    assert result == "polished"
-    assert captured["url"] == "http://server/v1/fallback"
+    result = gateway_chat(cfg, "hello")
+    assert result == "response"
+    assert captured["url"] == "http://server/v1/chat"
     assert captured["headers"]["Authorization"] == "Bearer secret-token"
     assert captured["headers"]["x-device-id"] == "pi-01"
-    assert captured["payload"] == {"prompt": "prompt", "draft": "draft", "reason": "reason"}
+    assert captured["payload"] == {"prompt": "hello"}
 
 
-def test_gateway_fallback_omits_auth_when_no_token(monkeypatch):
-    cfg = _cfg(
-        gateway_url="http://server/v1/fallback",
-        gateway_device_token="",
-        device_id="",
-    )
-
+def test_gateway_chat_omits_auth_when_no_token(monkeypatch):
+    cfg = _cfg(gateway_url="http://server/v1/chat", gateway_device_token="", device_id="")
     captured = {}
 
     def fake_post_json(url, payload, headers, timeout_seconds):
@@ -156,230 +131,151 @@ def test_gateway_fallback_omits_auth_when_no_token(monkeypatch):
 
     monkeypatch.setattr("runtime._post_json", fake_post_json)
 
-    gateway_fallback(cfg, "p", "d", "r")
+    gateway_chat(cfg, "hello")
     assert "Authorization" not in captured["headers"]
     assert "x-device-id" not in captured["headers"]
 
 
-def test_gateway_fallback_returns_empty_when_no_answer(monkeypatch):
-    cfg = _cfg(gateway_url="http://server/v1/fallback", gateway_device_token="t")
+def test_gateway_chat_returns_empty_when_no_answer(monkeypatch):
+    cfg = _cfg(gateway_url="http://server/v1/chat", gateway_device_token="t")
 
     def fake_post_json(url, payload, headers, timeout_seconds):
         return {}
 
     monkeypatch.setattr("runtime._post_json", fake_post_json)
 
-    result = gateway_fallback(cfg, "p", "d", "r")
+    result = gateway_chat(cfg, "hello")
     assert result == ""
 
 
-# ── generate ────────────────────────────────────────────────────────────────
+# ── generate (gateway-first flow) ─────────────────────────────────────────
 
 
-def test_generate_returns_error_when_local_backends_fail(monkeypatch):
-    cfg = _cfg()
+def test_generate_gateway_first_success(monkeypatch):
+    cfg = _cfg(gateway_first=True, gateway_url="http://server/v1/chat", gateway_device_token="t")
 
-    def failing_local_chat(_cfg, _prompt):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr("runtime.local_chat", failing_local_chat)
-
-    out = generate(cfg, "hello")
-    assert out["source"] == "error"
-    assert out["api_polished"] is False
-    assert "local backend error" in out["reason"]
-    assert out["local_backend_used"] is None
-
-
-def test_generate_uses_gateway_when_local_backends_fail_and_gateway_is_configured(monkeypatch):
-    cfg = _cfg(gateway_url="http://server/v1/fallback", gateway_device_token="secret")
-
-    def failing_local_chat(_cfg, _prompt):
-        raise RuntimeError("boom")
-
-    def fake_gateway_fallback(_cfg, prompt, draft, reason):
+    def fake_gateway(_cfg, prompt):
         assert prompt == "hello"
-        assert draft == ""
-        assert reason == "local model unavailable"
         return "gateway answer"
 
-    monkeypatch.setattr("runtime.local_chat", failing_local_chat)
-    monkeypatch.setattr("runtime.gateway_fallback", fake_gateway_fallback)
+    monkeypatch.setattr("runtime.gateway_chat", fake_gateway)
 
     out = generate(cfg, "hello")
     assert out["answer"] == "gateway answer"
     assert out["source"] == "gateway"
     assert out["api_polished"] is True
-    assert out["reason"] == "local model unavailable"
+    assert out["reason"] == "gateway_first"
     assert out["local_backend_used"] is None
 
 
-def test_generate_returns_error_when_local_and_gateway_fail(monkeypatch):
-    cfg = _cfg(gateway_url="http://server/v1/fallback", gateway_device_token="secret")
+def test_generate_gateway_first_fails_local_succeeds(monkeypatch):
+    cfg = _cfg(gateway_first=True, gateway_url="http://server/v1/chat", gateway_device_token="t")
 
-    def failing_local_chat(_cfg, _prompt):
-        raise RuntimeError("boom")
-
-    def failing_gateway_fallback(_cfg, _prompt, _draft, _reason):
+    def failing_gateway(_cfg, _prompt):
         raise RuntimeError("gateway down")
 
-    monkeypatch.setattr("runtime.local_chat", failing_local_chat)
-    monkeypatch.setattr("runtime.gateway_fallback", failing_gateway_fallback)
+    def fake_local(_cfg, _prompt):
+        return "local answer", "ollama"
+
+    monkeypatch.setattr("runtime.gateway_chat", failing_gateway)
+    monkeypatch.setattr("runtime.local_chat", fake_local)
 
     out = generate(cfg, "hello")
-    assert out["answer"] == ""
-    assert out["source"] == "error"
-    assert out["api_polished"] is False
-    assert "local model unavailable" in out["reason"]
-    assert "gateway unavailable or failed: gateway down" in out["reason"]
-    assert out["local_backend_used"] is None
-
-
-def test_generate_uses_gateway_when_needed(monkeypatch):
-    cfg = _cfg(force_fallback=False)
-
-    def fake_local_chat(_cfg, _prompt):
-        return "draft answer", "ollama"
-
-    def fake_needs_fallback(prompt, draft):
-        assert prompt == "hi"
-        assert draft == "draft answer"
-        return True, "test reason"
-
-    def fake_gateway_fallback(_cfg, prompt, draft, reason):
-        assert prompt == "hi"
-        assert draft == "draft answer"
-        assert reason == "test reason"
-        return "gateway answer"
-
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-    monkeypatch.setattr("runtime.needs_fallback", fake_needs_fallback)
-    monkeypatch.setattr("runtime.gateway_fallback", fake_gateway_fallback)
-
-    out = generate(cfg, "hi")
-    assert out["answer"] == "gateway answer"
-    assert out["source"] == "gateway"
-    assert out["api_polished"] is True
-    assert out["local_backend_used"] == "ollama"
-
-
-def test_generate_uses_gateway_when_always_use_gateway_configured(monkeypatch):
-    """When ALWAYS_USE_GATEWAY is true and gateway URL + token are set, every response goes to server for polish."""
-    cfg = _cfg(
-        force_fallback=False,
-        always_use_gateway=True,
-        gateway_url="http://server/v1/fallback",
-        gateway_device_token="secret",
-    )
-
-    def fake_local_chat(_cfg, _prompt):
-        return "draft answer", "ollama"
-
-    def fake_gateway_fallback(_cfg, prompt, draft, reason):
-        assert reason == "API polish via gateway (Sarvam/OpenRouter)"
-        return "polished answer"
-
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-    monkeypatch.setattr("runtime.gateway_fallback", fake_gateway_fallback)
-
-    out = generate(cfg, "hi")
-    assert out["answer"] == "polished answer"
-    assert out["source"] == "gateway"
-    assert out["api_polished"] is True
-
-
-def test_generate_falls_back_to_local_when_gateway_fails(monkeypatch):
-    cfg = _cfg(always_use_gateway=True, gateway_url="http://x/v1/fallback", gateway_device_token="t")
-
-    def fake_local_chat(_cfg, _prompt):
-        return "draft answer", "ollama"
-
-    def failing_gateway_fallback(_cfg, _prompt, _draft, _reason):
-        raise RuntimeError("gateway down")
-
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-    monkeypatch.setattr("runtime.gateway_fallback", failing_gateway_fallback)
-
-    out = generate(cfg, "hi")
-    assert out["answer"] == "draft answer"
-    assert out["source"] == "local"
-    assert out["api_polished"] is False
-    assert "gateway unavailable or failed" in out["reason"]
-
-
-def test_generate_with_force_fallback(monkeypatch):
-    cfg = _cfg(
-        force_fallback=True,
-        gateway_url="http://server/v1/fallback",
-        gateway_device_token="t",
-    )
-
-    def fake_local_chat(_cfg, _prompt):
-        return "local draft", "llamacpp"
-
-    captured_reason = {}
-
-    def fake_gateway_fallback(_cfg, prompt, draft, reason):
-        captured_reason["reason"] = reason
-        return "forced fallback answer"
-
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-    monkeypatch.setattr("runtime.gateway_fallback", fake_gateway_fallback)
-
-    out = generate(cfg, "hi")
-    assert out["answer"] == "forced fallback answer"
-    assert out["source"] == "gateway"
-    assert out["api_polished"] is True
-    assert captured_reason["reason"] == "forced fallback for testing"
-
-
-def test_generate_serves_local_when_no_fallback_needed(monkeypatch):
-    cfg = _cfg(force_fallback=False, always_use_gateway=False)
-
-    def fake_local_chat(_cfg, _prompt):
-        return "local answer", "llamacpp"
-
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-
-    out = generate(cfg, "hi")
     assert out["answer"] == "local answer"
     assert out["source"] == "local"
     assert out["api_polished"] is False
-    assert out["local_backend_used"] == "llamacpp"
-    assert out["reason"] == ""
+    assert out["local_backend_used"] == "ollama"
 
 
-def test_generate_empty_draft_returns_error(monkeypatch):
-    cfg = _cfg()
+def test_generate_gateway_first_empty_local_succeeds(monkeypatch):
+    cfg = _cfg(gateway_first=True, gateway_url="http://server/v1/chat", gateway_device_token="t")
 
-    def fake_local_chat(_cfg, _prompt):
-        return "", "ollama"
-
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-
-    out = generate(cfg, "hi")
-    assert out["source"] == "error"
-    assert out["reason"] == "empty local response"
-    assert out["local_backend_used"] is None
-
-
-def test_generate_gateway_returns_empty_falls_back_to_local(monkeypatch):
-    cfg = _cfg(
-        always_use_gateway=True,
-        gateway_url="http://server/v1/fallback",
-        gateway_device_token="t",
-    )
-
-    def fake_local_chat(_cfg, _prompt):
-        return "local draft", "ollama"
-
-    def empty_gateway(_cfg, _prompt, _draft, _reason):
+    def empty_gateway(_cfg, _prompt):
         return ""
 
-    monkeypatch.setattr("runtime.local_chat", fake_local_chat)
-    monkeypatch.setattr("runtime.gateway_fallback", empty_gateway)
+    def fake_local(_cfg, _prompt):
+        return "local answer", "llamacpp"
 
-    out = generate(cfg, "hi")
-    assert out["answer"] == "local draft"
+    monkeypatch.setattr("runtime.gateway_chat", empty_gateway)
+    monkeypatch.setattr("runtime.local_chat", fake_local)
+
+    out = generate(cfg, "hello")
+    assert out["answer"] == "local answer"
     assert out["source"] == "local"
-    assert out["reason"] == "gateway returned empty"
+
+
+def test_generate_force_local_only_skips_gateway(monkeypatch):
+    cfg = _cfg(force_local_only=True, gateway_url="http://server/v1/chat", gateway_device_token="t")
+    gateway_called = []
+
+    def spy_gateway(_cfg, _prompt):
+        gateway_called.append(True)
+        return "should not reach"
+
+    def fake_local(_cfg, _prompt):
+        return "local answer", "llamacpp"
+
+    monkeypatch.setattr("runtime.gateway_chat", spy_gateway)
+    monkeypatch.setattr("runtime.local_chat", fake_local)
+
+    out = generate(cfg, "hello")
+    assert out["answer"] == "local answer"
+    assert out["source"] == "local"
+    assert gateway_called == []
+
+
+def test_generate_gateway_not_configured_uses_local(monkeypatch):
+    cfg = _cfg(gateway_first=True, gateway_url="", gateway_device_token="")
+
+    def fake_local(_cfg, _prompt):
+        return "local answer", "ollama"
+
+    monkeypatch.setattr("runtime.local_chat", fake_local)
+
+    out = generate(cfg, "hello")
+    assert out["answer"] == "local answer"
+    assert out["source"] == "local"
+    assert out["api_polished"] is False
+
+
+def test_generate_local_fails_returns_error(monkeypatch):
+    cfg = _cfg(gateway_first=False)
+
+    def failing_local(_cfg, _prompt):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("runtime.local_chat", failing_local)
+
+    out = generate(cfg, "hello")
+    assert out["source"] == "error"
+    assert "local backend error" in out["reason"]
+
+
+def test_generate_gateway_and_local_both_fail(monkeypatch):
+    cfg = _cfg(gateway_first=True, gateway_url="http://server/v1/chat", gateway_device_token="t")
+
+    def failing_gateway(_cfg, _prompt):
+        raise RuntimeError("gateway down")
+
+    def failing_local(_cfg, _prompt):
+        raise RuntimeError("local down")
+
+    monkeypatch.setattr("runtime.gateway_chat", failing_gateway)
+    monkeypatch.setattr("runtime.local_chat", failing_local)
+
+    out = generate(cfg, "hello")
+    assert out["source"] == "error"
+    assert "local backend error" in out["reason"]
+
+
+def test_generate_local_empty_returns_error(monkeypatch):
+    cfg = _cfg(gateway_first=False)
+
+    def fake_local(_cfg, _prompt):
+        return "", "ollama"
+
+    monkeypatch.setattr("runtime.local_chat", fake_local)
+
+    out = generate(cfg, "hello")
+    assert out["source"] == "error"
+    assert out["reason"] == "empty local response"

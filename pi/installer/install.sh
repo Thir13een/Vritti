@@ -333,7 +333,7 @@ upsert_env "$AGENT_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
 # Derive heartbeat URL from GATEWAY_URL
 GATEWAY_URL="$(get_env "$RUNTIME_ENV" "GATEWAY_URL" || true)"
 if [[ -n "${GATEWAY_URL}" && "${GATEWAY_URL}" != *"your-gateway-domain"* ]]; then
-  HEARTBEAT_URL="${GATEWAY_URL%/v1/fallback}/v1/device/heartbeat"
+  HEARTBEAT_URL="${GATEWAY_URL%/v1/chat}/v1/device/heartbeat"
   upsert_env "$AGENT_ENV" "GATEWAY_HEARTBEAT_URL" "$HEARTBEAT_URL"
   info "Heartbeat URL synced: ${HEARTBEAT_URL}"
 fi
@@ -345,11 +345,11 @@ else
 fi
 
 if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
-  upsert_env "$RUNTIME_ENV" "ALWAYS_USE_GATEWAY" "false"
-  ok "Gateway polish disabled" "ALWAYS_USE_GATEWAY=false until registration succeeds"
+  upsert_env "$RUNTIME_ENV" "GATEWAY_FIRST" "false"
+  ok "Gateway disabled" "GATEWAY_FIRST=false until registration succeeds"
 else
-  upsert_env "$RUNTIME_ENV" "ALWAYS_USE_GATEWAY" "true"
-  ok "Gateway polish enabled" "ALWAYS_USE_GATEWAY=true"
+  upsert_env "$RUNTIME_ENV" "GATEWAY_FIRST" "true"
+  ok "Gateway enabled" "GATEWAY_FIRST=true"
 fi
 step_done
 
@@ -452,7 +452,7 @@ if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
   warn "Gateway token not issued yet. To connect this Pi to the server:"
   echo ""
   cmd "Edit /opt/ai-runtime/.env:"
-  echo "       ${DIM}GATEWAY_URL=http://<server-ip>:9000/v1/fallback${RST}"
+  echo "       ${DIM}GATEWAY_URL=http://<server-ip>:9000/v1/chat${RST}"
   echo "       ${DIM}GATEWAY_REGISTER_URL=http://<server-ip>:9000/v1/device/register${RST}"
   echo "       ${DIM}GATEWAY_BOOTSTRAP_SECRET=<DEVICE_REGISTER_SECRET from server .env>${RST}"
   echo ""
@@ -469,7 +469,7 @@ echo ""
 info "Key settings in /opt/ai-runtime/.env:"
 echo "       ${DIM}LOCAL_BACKEND=llamacpp${RST}       ${DIM}# or ollama${RST}"
 echo "       ${DIM}LOCAL_MODEL=${SELECTED_MODEL}${RST}"
-echo "       ${DIM}ALWAYS_USE_GATEWAY=true${RST}    ${DIM}# send every response to server for polish${RST}"
+echo "       ${DIM}GATEWAY_FIRST=true${RST}          ${DIM}# try gateway first, local as backup${RST}"
 echo ""
 
 section_box "Quick Reference" "$CYAN"

@@ -11,11 +11,6 @@ from config import RuntimeConfig
 logger = logging.getLogger("ai_runtime")
 
 
-def needs_fallback(prompt: str, draft: str) -> tuple[bool, str]:
-    """Stub — polishing is handled by ALWAYS_USE_GATEWAY or FORCE_FALLBACK."""
-    return False, ""
-
-
 def _post_json(
     url: str,
     payload: dict[str, Any],
@@ -114,14 +109,14 @@ def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
     raise RuntimeError("all local backends failed: " + " | ".join(errors))
 
 
-def gateway_fallback(cfg: RuntimeConfig, prompt: str, draft: str, reason: str) -> str:
+def gateway_chat(cfg: RuntimeConfig, prompt: str) -> str:
     headers = {"Content-Type": "application/json"}
     if cfg.gateway_device_token:
         headers["Authorization"] = f"Bearer {cfg.gateway_device_token}"
     if cfg.device_id:
         headers["x-device-id"] = cfg.device_id
 
-    payload = {"prompt": prompt, "draft": draft, "reason": reason}
+    payload = {"prompt": prompt}
     data = _post_json(cfg.gateway_url, payload, headers, timeout_seconds=cfg.gateway_timeout_seconds)
     return str(data.get("answer", "")).strip()
 
@@ -132,41 +127,39 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
 
     gateway_configured = bool(cfg.gateway_url and cfg.gateway_device_token)
 
-    try:
-        draft, local_backend_used = local_chat(cfg, prompt)
-    except RuntimeError as exc:
-        logger.error(
-            "local backends failed",
-            extra={"error": str(exc)},
-        )
-        if gateway_configured:
-            reason = "local model unavailable"
-            try:
-                improved = gateway_fallback(cfg, prompt, "", reason)
-                if improved:
-                    logger.info(
-                        "serving gateway response after local failure",
-                        extra={"api_polished": True, "polish_reason": reason},
-                    )
-                    return {
-                        "answer": improved,
-                        "source": "gateway",
-                        "api_polished": True,
-                        "reason": reason,
-                        "local_backend_used": None,
-                    }
-            except RuntimeError as gateway_exc:
-                logger.error(
-                    "gateway fallback failed after local failure",
-                    extra={"error": str(gateway_exc)},
-                )
+    # Force local only — skip gateway entirely
+    if cfg.force_local_only:
+        return _generate_local(cfg, prompt)
+
+    # Gateway-first (default)
+    if cfg.gateway_first and gateway_configured:
+        try:
+            answer = gateway_chat(cfg, prompt)
+            if answer:
+                logger.info("serving gateway response", extra={"api_polished": True})
                 return {
-                    "answer": "",
-                    "source": "error",
-                    "api_polished": False,
-                    "reason": f"{reason}; gateway unavailable or failed: {gateway_exc}",
+                    "answer": answer,
+                    "source": "gateway",
+                    "api_polished": True,
+                    "reason": "gateway_first",
                     "local_backend_used": None,
                 }
+            logger.warning("gateway returned empty, falling back to local")
+        except RuntimeError as exc:
+            logger.warning("gateway failed, falling back to local", extra={"error": str(exc)})
+
+        # Gateway failed or empty — fall back to local
+        return _generate_local(cfg, prompt)
+
+    # Gateway not configured or gateway_first=False — use local
+    return _generate_local(cfg, prompt)
+
+
+def _generate_local(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
+    try:
+        text, backend = local_chat(cfg, prompt)
+    except RuntimeError as exc:
+        logger.error("local backends failed", extra={"error": str(exc)})
         return {
             "answer": "",
             "source": "error",
@@ -175,7 +168,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
             "local_backend_used": None,
         }
 
-    if not draft:
+    if not text:
         logger.error("empty local response")
         return {
             "answer": "",
@@ -185,62 +178,11 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
             "local_backend_used": None,
         }
 
-    use_backup, reason = needs_fallback(prompt, draft)
-    if cfg.force_fallback:
-        use_backup = True
-        reason = "forced fallback for testing"
-    elif cfg.always_use_gateway and gateway_configured:
-        use_backup = True
-        reason = "API polish via gateway (Sarvam/OpenRouter)"
-
-    if not use_backup:
-        logger.info(
-            "serving local response",
-            extra={"backend": local_backend_used, "api_polished": False},
-        )
-        return {
-            "answer": draft,
-            "source": "local",
-            "api_polished": False,
-            "reason": "",
-            "local_backend_used": local_backend_used,
-        }
-
-    try:
-        improved = gateway_fallback(cfg, prompt, draft, reason)
-        if improved:
-            logger.info(
-                "serving API-polished response",
-                extra={"backend": local_backend_used, "api_polished": True, "polish_reason": reason},
-            )
-            return {
-                "answer": improved,
-                "source": "gateway",
-                "api_polished": True,
-                "reason": reason,
-                "local_backend_used": local_backend_used,
-            }
-    except RuntimeError as exc:
-        logger.error(
-            "API polish failed",
-            extra={"error": str(exc)},
-        )
-        return {
-            "answer": draft,
-            "source": "local",
-            "api_polished": False,
-            "reason": f"gateway unavailable or failed: {exc}",
-            "local_backend_used": local_backend_used,
-        }
-
-    logger.warning(
-        "API polish returned empty answer",
-        extra={"backend": local_backend_used, "polish_reason": reason},
-    )
+    logger.info("serving local response", extra={"backend": backend, "api_polished": False})
     return {
-        "answer": draft,
+        "answer": text,
         "source": "local",
         "api_polished": False,
-        "reason": "gateway returned empty",
-        "local_backend_used": local_backend_used,
+        "reason": "",
+        "local_backend_used": backend,
     }
