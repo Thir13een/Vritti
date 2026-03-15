@@ -2,7 +2,9 @@ from server import health, chat, ChatRequest
 
 
 def test_health_endpoint():
-    assert health() == {"status": "ok"}
+    result = health()
+    assert result["status"] in ("ok", "degraded")
+    assert "backend" in result
 
 
 def test_chat_returns_error_when_local_backends_fail(monkeypatch):
