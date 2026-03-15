@@ -11,6 +11,8 @@ node_modules/
 # Environment & secrets
 .env
 cloud/gateway/.env
+cloud/gateway/fresh-start.sh
+cloud/gateway/CREDENTIALS.txt
 install.log
 
 # IDE / tools
