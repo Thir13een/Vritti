@@ -12,7 +12,7 @@ def test_chat_returns_error_when_local_backends_fail(monkeypatch):
         return {
             "answer": "",
             "source": "error",
-            "fallback_used": False,
+            "api_polished": False,
             "reason": "local backend error: boom",
         }
 
@@ -20,5 +20,5 @@ def test_chat_returns_error_when_local_backends_fail(monkeypatch):
 
     body = chat(ChatRequest(prompt="hi"))
     assert body["source"] == "error"
-    assert body["fallback_used"] is False
+    assert body["api_polished"] is False
     assert "local backend error" in body["reason"]

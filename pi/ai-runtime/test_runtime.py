@@ -186,7 +186,7 @@ def test_generate_returns_error_when_local_backends_fail(monkeypatch):
 
     out = generate(cfg, "hello")
     assert out["source"] == "error"
-    assert out["fallback_used"] is False
+    assert out["api_polished"] is False
     assert "local backend error" in out["reason"]
     assert out["local_backend_used"] is None
 
@@ -209,7 +209,7 @@ def test_generate_uses_gateway_when_local_backends_fail_and_gateway_is_configure
     out = generate(cfg, "hello")
     assert out["answer"] == "gateway answer"
     assert out["source"] == "gateway"
-    assert out["fallback_used"] is True
+    assert out["api_polished"] is True
     assert "local backend error: boom" in out["reason"]
     assert out["local_backend_used"] is None
 
@@ -229,7 +229,7 @@ def test_generate_returns_error_when_local_and_gateway_fail(monkeypatch):
     out = generate(cfg, "hello")
     assert out["answer"] == ""
     assert out["source"] == "error"
-    assert out["fallback_used"] is False
+    assert out["api_polished"] is False
     assert "local backend error: boom" in out["reason"]
     assert "gateway unavailable or failed: gateway down" in out["reason"]
     assert out["local_backend_used"] is None
@@ -259,7 +259,7 @@ def test_generate_uses_gateway_when_needed(monkeypatch):
     out = generate(cfg, "hi")
     assert out["answer"] == "gateway answer"
     assert out["source"] == "gateway"
-    assert out["fallback_used"] is True
+    assert out["api_polished"] is True
     assert out["local_backend_used"] == "ollama"
 
 
@@ -285,7 +285,7 @@ def test_generate_uses_gateway_when_always_use_gateway_configured(monkeypatch):
     out = generate(cfg, "hi")
     assert out["answer"] == "polished answer"
     assert out["source"] == "gateway"
-    assert out["fallback_used"] is True
+    assert out["api_polished"] is True
 
 
 def test_generate_falls_back_to_local_when_gateway_fails(monkeypatch):
@@ -303,7 +303,7 @@ def test_generate_falls_back_to_local_when_gateway_fails(monkeypatch):
     out = generate(cfg, "hi")
     assert out["answer"] == "draft answer"
     assert out["source"] == "local"
-    assert out["fallback_used"] is False
+    assert out["api_polished"] is False
     assert "gateway unavailable or failed" in out["reason"]
 
 
@@ -329,7 +329,7 @@ def test_generate_with_force_fallback(monkeypatch):
     out = generate(cfg, "hi")
     assert out["answer"] == "forced fallback answer"
     assert out["source"] == "gateway"
-    assert out["fallback_used"] is True
+    assert out["api_polished"] is True
     assert captured_reason["reason"] == "forced fallback for testing"
 
 
@@ -344,7 +344,7 @@ def test_generate_serves_local_when_no_fallback_needed(monkeypatch):
     out = generate(cfg, "hi")
     assert out["answer"] == "local answer"
     assert out["source"] == "local"
-    assert out["fallback_used"] is False
+    assert out["api_polished"] is False
     assert out["local_backend_used"] == "llamacpp"
     assert out["reason"] == ""
 

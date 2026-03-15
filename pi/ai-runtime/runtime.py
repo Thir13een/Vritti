@@ -149,12 +149,12 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
                 if improved:
                     logger.info(
                         "serving gateway response after local failure",
-                        extra={"fallback_used": True, "fallback_reason": reason},
+                        extra={"api_polished": True, "polish_reason": reason},
                     )
                     return {
                         "answer": improved,
                         "source": "gateway",
-                        "fallback_used": True,
+                        "api_polished": True,
                         "reason": reason,
                         "local_backend_used": None,
                     }
@@ -166,14 +166,14 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
                 return {
                     "answer": "",
                     "source": "error",
-                    "fallback_used": False,
+                    "api_polished": False,
                     "reason": f"{reason}; gateway unavailable or failed: {gateway_exc}",
                     "local_backend_used": None,
                 }
         return {
             "answer": "",
             "source": "error",
-            "fallback_used": False,
+            "api_polished": False,
             "reason": f"local backend error: {exc}",
             "local_backend_used": None,
         }
@@ -183,7 +183,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
         return {
             "answer": "",
             "source": "error",
-            "fallback_used": False,
+            "api_polished": False,
             "reason": "empty local response",
             "local_backend_used": None,
         }
@@ -199,12 +199,12 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
     if not use_backup:
         logger.info(
             "serving local response",
-            extra={"backend": local_backend_used, "fallback_used": False},
+            extra={"backend": local_backend_used, "api_polished": False},
         )
         return {
             "answer": draft,
             "source": "local",
-            "fallback_used": False,
+            "api_polished": False,
             "reason": "",
             "local_backend_used": local_backend_used,
         }
@@ -213,37 +213,37 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
         improved = gateway_fallback(cfg, prompt, draft, reason)
         if improved:
             logger.info(
-                "serving gateway fallback response",
-                extra={"backend": local_backend_used, "fallback_used": True, "fallback_reason": reason},
+                "serving API-polished response",
+                extra={"backend": local_backend_used, "api_polished": True, "polish_reason": reason},
             )
             return {
                 "answer": improved,
                 "source": "gateway",
-                "fallback_used": True,
+                "api_polished": True,
                 "reason": reason,
                 "local_backend_used": local_backend_used,
             }
     except RuntimeError as exc:
         logger.error(
-            "gateway fallback failed",
+            "API polish failed",
             extra={"error": str(exc)},
         )
         return {
             "answer": draft,
             "source": "local",
-            "fallback_used": False,
+            "api_polished": False,
             "reason": f"gateway unavailable or failed: {exc}",
             "local_backend_used": local_backend_used,
         }
 
     logger.warning(
-        "gateway fallback returned empty answer",
-        extra={"backend": local_backend_used, "fallback_reason": reason},
+        "API polish returned empty answer",
+        extra={"backend": local_backend_used, "polish_reason": reason},
     )
     return {
         "answer": draft,
         "source": "local",
-        "fallback_used": False,
+        "api_polished": False,
         "reason": "gateway returned empty",
         "local_backend_used": local_backend_used,
     }
