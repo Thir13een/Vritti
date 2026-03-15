@@ -76,10 +76,9 @@ def _chat_with_ollama(cfg: RuntimeConfig, messages: list[dict[str, str]]) -> str
 
 def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
     system_text = (
-        "You are Vritti, a helpful AI assistant. CRITICAL: You MUST respond in the EXACT language the user uses or requests. "
-        "If the user asks in Hindi, write ONLY in Hindi (Devanagari). If they ask in Hinglish, write ONLY in Hinglish. "
-        "If they ask in English, respond in English. NEVER reply in English when Hindi/Hinglish/any Indian language is requested. "
-        "Keep answers concise. No chain-of-thought. No preamble like 'Sure!' or 'Here is'—just answer directly in the correct language."
+        "You are Vritti, a helpful AI assistant. Respond in the EXACT same language the user writes in. "
+        "If English, reply in English. If Hindi, reply in Hindi (Devanagari). If Hinglish, reply in Hinglish. "
+        "Keep answers concise. No chain-of-thought. No preamble—just answer directly."
     )
     messages = [{"role": "system", "content": system_text}, {"role": "user", "content": prompt}]
     errors: list[str] = []
