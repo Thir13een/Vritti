@@ -20,57 +20,78 @@ TOTAL_STEPS=7
 SECONDS=0
 
 # ── Color & formatting ───────────────────────────────────────────────────────
-if [[ -t 1 ]] && command -v tput &>/dev/null && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
-  RST="$(tput sgr0)"
-  BOLD="$(tput bold)"
-  DIM="$(tput dim)"
-  UL="$(tput smul)"
-  GREEN="$(tput setaf 2)"
-  YELLOW="$(tput setaf 3)"
-  RED="$(tput setaf 1)"
-  CYAN="$(tput setaf 6)"
-  BLUE="$(tput setaf 4)"
+if [[ -t 1 ]] && command -v tput &>/dev/null && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 256 ]]; then
+  RST="$(tput sgr0)"  BOLD="$(tput bold)"  DIM="$(tput dim)"  UL="$(tput smul)"
+  SAFFRON="$(tput setaf 208)"
+  SAFFRON_DARK="$(tput setaf 172)"
+  WHITE="$(tput setaf 255)"
+  CREAM="$(tput setaf 230)"
+  GREEN="$(tput setaf 82)"
+  GREEN_DARK="$(tput setaf 34)"
+  RED="$(tput setaf 196)"
+  YELLOW="$(tput setaf 220)"
+  BLUE="$(tput setaf 75)"
+  CYAN="$(tput setaf 87)"
+  MAGENTA="$(tput setaf 213)"
+  BG_SAFFRON="$(tput setab 208)"
+  BG_GREEN="$(tput setab 34)"
+elif [[ -t 1 ]] && command -v tput &>/dev/null && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
+  RST="$(tput sgr0)"  BOLD="$(tput bold)"  DIM="$(tput dim)"  UL="$(tput smul)"
+  SAFFRON="$(tput setaf 3)"  SAFFRON_DARK="$(tput setaf 3)"
+  WHITE="$(tput setaf 7)"    CREAM="$(tput setaf 7)"
+  GREEN="$(tput setaf 2)"    GREEN_DARK="$(tput setaf 2)"
+  RED="$(tput setaf 1)"      YELLOW="$(tput setaf 3)"
+  BLUE="$(tput setaf 6)"     CYAN="$(tput setaf 6)"
   MAGENTA="$(tput setaf 5)"
-  WHITE="$(tput setaf 7)"
-  BG_BLUE="$(tput setab 4)"
+  BG_SAFFRON="$(tput setab 3)"  BG_GREEN="$(tput setab 2)"
 else
   RST="" BOLD="" DIM="" UL=""
-  GREEN="" YELLOW="" RED="" CYAN="" BLUE="" MAGENTA="" WHITE=""
-  BG_BLUE=""
+  SAFFRON="" SAFFRON_DARK="" WHITE="" CREAM=""
+  GREEN="" GREEN_DARK="" RED="" YELLOW="" BLUE="" CYAN="" MAGENTA=""
+  BG_SAFFRON="" BG_GREEN=""
 fi
 
 # ── Output helpers ────────────────────────────────────────────────────────────
-divider() {
-  echo "${DIM}  ─────────────────────────────────────────────────────────────────${RST}"
-}
-
+divider()    { echo "${SAFFRON_DARK}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RST}"; }
 step_header() {
   local n="$1" title="$2"
   echo ""
-  echo "  ${BOLD}${BG_BLUE}${WHITE} STEP ${n}/${TOTAL_STEPS} ${RST} ${BOLD}${BLUE}${title}${RST}"
+  echo "  ${BOLD}${BG_SAFFRON}${WHITE} STEP ${n}/${TOTAL_STEPS} ${RST} ${BOLD}${SAFFRON}${title}${RST}"
   divider
 }
+step_done() {
+  echo ""
+  echo "  ${GREEN}  ━━ Step complete ━━${RST}"
+  sleep 0.3
+}
 
-ok()    { echo "  ${GREEN}  ✓  ${RST}${BOLD}$1${RST}${DIM}${2:+  — $2}${RST}"; }
-info()  { echo "  ${CYAN}  ℹ  ${RST}${DIM}$*${RST}"; }
-doing() { echo "  ${BLUE}  ►  ${RST}$*${DIM}...${RST}"; }
+ok()    { echo "  ${GREEN}  ✓  ${RST}${BOLD}${WHITE}$1${RST}${CREAM}${2:+  — $2}${RST}"; }
+info()  { echo "  ${BLUE}  ℹ  ${RST}${CREAM}$*${RST}"; }
+doing() { echo "  ${SAFFRON}  ►  ${RST}${WHITE}$*${DIM}...${RST}"; }
 warn()  { echo "  ${YELLOW}  ⚠  ${RST}${YELLOW}$*${RST}"; }
 fail()  { echo "  ${RED}  ✗  ${RST}${RED}${BOLD}$*${RST}" >&2; }
 cmd()   { echo "       ${DIM}\$ $*${RST}"; }
 
+SPINNER_CHARS="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+stream_progress() {
+  local spin_idx=0 line=""
+  while IFS= read -r line; do
+    local spin="${SPINNER_CHARS:spin_idx:1}"
+    printf "\r  ${SAFFRON}  %s  ${RST}${DIM}%-68s${RST}" "$spin" "${line:0:68}"
+    spin_idx=$(( (spin_idx + 1) % ${#SPINNER_CHARS} ))
+  done
+  printf "\r%-80s\r" ""
+}
+
 section_box() {
-  local title="$1"
-  local color="${2:-$CYAN}"
+  local title="$1" color="${2:-$SAFFRON}"
   echo ""
   echo "  ${BOLD}${color}╭───────────────────────────────────────────────────────────╮${RST}"
-  printf "  ${BOLD}${color}│${RST} ${BOLD}%-57s${RST} ${BOLD}${color}│${RST}\n" "$title"
+  printf "  ${BOLD}${color}│${RST} ${BOLD}${WHITE}%-57s${RST} ${BOLD}${color}│${RST}\n" "$title"
   echo "  ${BOLD}${color}╰───────────────────────────────────────────────────────────╯${RST}"
 }
 
-result_line() {
-  local label="$1" value="$2"
-  printf "  ${BOLD}  %-18s${RST} %s\n" "$label" "$value"
-}
+result_line() { printf "  ${BOLD}${SAFFRON}  %-18s${RST} %s\n" "$1" "$2"; }
 
 # ── Utility functions ─────────────────────────────────────────────────────────
 generate_token() {
@@ -121,25 +142,25 @@ PY
 # ══════════════════════════════════════════════════════════════════════════════
 
 echo ""
-echo "${BOLD}${CYAN}"
+echo "${BOLD}${SAFFRON}"
 echo "  ┌───────────────────────────────────────────────────────────────────┐"
 echo "  │                                                                   │"
-echo "  │    ██╗   ██╗██████╗ ██╗████████╗████████╗██╗                      │"
-echo "  │    ██║   ██║██╔══██╗██║╚══██╔══╝╚══██╔══╝██║                      │"
-echo "  │    ██║   ██║██████╔╝██║   ██║      ██║   ██║                      │"
-echo "  │    ╚██╗ ██╔╝██╔══██╗██║   ██║      ██║   ██║                      │"
-echo "  │     ╚████╔╝ ██║  ██║██║   ██║      ██║   ██║                      │"
-echo "  │      ╚═══╝  ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝   ╚═╝                      │"
+echo "  │    ${WHITE}██╗   ██╗${SAFFRON}██████╗ ${GREEN}██╗${SAFFRON}████████╗${GREEN}████████╗${WHITE}██╗${SAFFRON}                      │"
+echo "  │    ${WHITE}██║   ██║${SAFFRON}██╔══██╗${GREEN}██║${SAFFRON}╚══██╔══╝${GREEN}╚══██╔══╝${WHITE}██║${SAFFRON}                      │"
+echo "  │    ${WHITE}██║   ██║${SAFFRON}██████╔╝${GREEN}██║${SAFFRON}   ██║   ${GREEN}   ██║   ${WHITE}██║${SAFFRON}                      │"
+echo "  │    ${WHITE}╚██╗ ██╔╝${SAFFRON}██╔══██╗${GREEN}██║${SAFFRON}   ██║   ${GREEN}   ██║   ${WHITE}██║${SAFFRON}                      │"
+echo "  │    ${WHITE} ╚████╔╝ ${SAFFRON}██║  ██║${GREEN}██║${SAFFRON}   ██║   ${GREEN}   ██║   ${WHITE}██║${SAFFRON}                      │"
+echo "  │    ${WHITE}  ╚═══╝  ${SAFFRON}╚═╝  ╚═╝${GREEN}╚═╝${SAFFRON}   ╚═╝   ${GREEN}   ╚═╝   ${WHITE}╚═╝${SAFFRON}                      │"
 echo "  │                                                                   │"
-echo "  │          ${WHITE}P I   I N S T A L L E R${CYAN}                                │"
-echo "  │          ${DIM}${WHITE}ai-runtime  ·  device-agent  ·  systemd${RST}${BOLD}${CYAN}             │"
+echo "  │          ${WHITE}P I   I N S T A L L E R${SAFFRON}                                │"
+echo "  │          ${CREAM}ai-runtime  ·  device-agent  ·  systemd${SAFFRON}              │"
 echo "  │                                                                   │"
 echo "  └───────────────────────────────────────────────────────────────────┘"
 echo "${RST}"
 
-info "Source directory: ${BOLD}${REPO_DIR}${RST}"
-info "Hostname: ${BOLD}$(hostname)${RST}"
-info "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+info "Source directory : ${BOLD}${WHITE}${REPO_DIR}${RST}"
+info "Hostname         : ${BOLD}${WHITE}$(hostname)${RST}"
+info "Time             : $(date '+%Y-%m-%d %H:%M:%S')"
 
 # ── Step 1: System packages ──────────────────────────────────────────────────
 step_header 1 "Installing system packages"
@@ -147,16 +168,15 @@ info "Getting the basics: Python, pip, curl."
 echo ""
 
 doing "Updating package lists"
-apt-get update -qq 2>&1 | tail -1 | while IFS= read -r line; do info "$line"; done
+apt-get update -qq 2>&1 | stream_progress
 ok "Package lists updated"
 
 doing "Installing python3, python3-venv, python3-pip, curl"
-apt-get install -y -qq python3 python3-venv python3-pip curl 2>&1 | tail -3 | while IFS= read -r line; do
-  info "$line"
-done
+apt-get install -y -qq python3 python3-venv python3-pip curl 2>&1 | stream_progress
 ok "System packages installed"
 
 info "Python version: ${BOLD}$(python3 --version 2>/dev/null)${RST}"
+step_done
 
 # ── Step 2: ai-runtime ──────────────────────────────────────────────────────
 step_header 2 "Installing ai-runtime"
@@ -184,8 +204,8 @@ python3 -m venv /opt/ai-runtime/.venv
 ok "Virtual environment created" "/opt/ai-runtime/.venv"
 
 doing "Installing Python dependencies"
-/opt/ai-runtime/.venv/bin/pip install -q --upgrade pip
-/opt/ai-runtime/.venv/bin/pip install -q -r /opt/ai-runtime/requirements.txt
+/opt/ai-runtime/.venv/bin/pip install -q --upgrade pip 2>&1 | stream_progress
+/opt/ai-runtime/.venv/bin/pip install -q -r /opt/ai-runtime/requirements.txt 2>&1 | stream_progress
 PKG_COUNT=$(/opt/ai-runtime/.venv/bin/pip list --format=columns 2>/dev/null | tail -n +3 | wc -l)
 ok "Dependencies installed" "${PKG_COUNT} packages (fastapi, uvicorn, pydantic...)"
 
@@ -196,6 +216,7 @@ if [[ ! -f "$RUNTIME_ENV" ]]; then
 else
   ok "Runtime config exists" "$RUNTIME_ENV"
 fi
+step_done
 
 # ── Step 3: device-agent ─────────────────────────────────────────────────────
 step_header 3 "Installing device-agent"
@@ -217,6 +238,7 @@ if [[ ! -f "$AGENT_ENV" ]]; then
 else
   ok "Agent config exists" "$AGENT_ENV"
 fi
+step_done
 
 # ── Step 4: Device registration & token ──────────────────────────────────────
 step_header 4 "Device registration & token"
@@ -287,6 +309,7 @@ else
   upsert_env "$RUNTIME_ENV" "ALWAYS_USE_GATEWAY" "true"
   ok "Gateway polish enabled" "ALWAYS_USE_GATEWAY=true"
 fi
+step_done
 
 # ── Step 5: systemd services ────────────────────────────────────────────────
 step_header 5 "Installing systemd services"
@@ -310,6 +333,7 @@ doing "Copying device-agent.service"
 sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/device-agent.service" \
   > /etc/systemd/system/device-agent.service
 ok "device-agent.service installed" "/etc/systemd/system/"
+step_done
 
 # ── Step 6: Enable & start services ─────────────────────────────────────────
 step_header 6 "Enabling and starting services"
@@ -321,7 +345,7 @@ systemctl daemon-reload
 ok "systemd reloaded"
 
 doing "Enabling ai-runtime and device-agent for auto-start on boot"
-systemctl enable ai-runtime device-agent 2>&1 | while IFS= read -r line; do info "$line"; done
+systemctl enable ai-runtime device-agent 2>&1 | stream_progress
 ok "Services enabled" "auto-start on boot"
 
 doing "Starting ai-runtime"
@@ -341,6 +365,7 @@ if systemctl is-active --quiet device-agent; then
 else
   warn "device-agent may not have started, check the logs below"
 fi
+step_done
 
 # ── Step 7: Summary ─────────────────────────────────────────────────────────
 step_header 7 "Installation complete"
@@ -350,10 +375,17 @@ MINS=$((ELAPSED / 60))
 SECS=$((ELAPSED % 60))
 
 echo ""
-echo "  ${BOLD}${GREEN}"
+echo "  ${BOLD}${SAFFRON}"
 echo "  ┌───────────────────────────────────────────────────────────────────┐"
 echo "  │                                                                   │"
-echo "  │              ✓  PI SETUP COMPLETE                                 │"
+echo "  │    ${WHITE}██████╗  ${GREEN}██╗${SAFFRON}       ${WHITE}██████╗ ${GREEN}███████╗${SAFFRON} █████╗ ██████╗ ██╗   ██╗${SAFFRON}   │"
+echo "  │    ${WHITE}██╔══██╗ ${GREEN}██║${SAFFRON}       ${WHITE}██╔══██╗${GREEN}██╔════╝${SAFFRON}██╔══██╗██╔══██╗╚██╗ ██╔╝${SAFFRON}   │"
+echo "  │    ${WHITE}██████╔╝ ${GREEN}██║${SAFFRON}       ${WHITE}██████╔╝${GREEN}█████╗  ${SAFFRON}███████║██║  ██║ ╚████╔╝ ${SAFFRON}   │"
+echo "  │    ${WHITE}██╔═══╝  ${GREEN}██║${SAFFRON}       ${WHITE}██╔══██╗${GREEN}██╔══╝  ${SAFFRON}██╔══██║██║  ██║  ╚██╔╝  ${SAFFRON}   │"
+echo "  │    ${WHITE}██║      ${GREEN}██║${SAFFRON}       ${WHITE}██║  ██║${GREEN}███████╗${SAFFRON}██║  ██║██████╔╝   ██║   ${SAFFRON}   │"
+echo "  │    ${WHITE}╚═╝      ${GREEN}╚═╝${SAFFRON}       ${WHITE}╚═╝  ╚═╝${GREEN}╚══════╝${SAFFRON}╚═╝  ╚═╝╚═════╝    ╚═╝   ${SAFFRON}   │"
+echo "  │                                                                   │"
+echo "  │       ${GREEN}✓${RST}${BOLD}${WHITE}  Pi setup complete in ${MINS}m ${SECS}s${SAFFRON}                          │"
 echo "  │                                                                   │"
 echo "  └───────────────────────────────────────────────────────────────────┘"
 echo "  ${RST}"
@@ -408,5 +440,5 @@ echo "  ${DIM}Status        ${RST} sudo systemctl status ai-runtime device-agent
 echo ""
 divider
 echo ""
-echo "  ${DIM}Finished in ${BOLD}${MINS}m ${SECS}s${RST}"
+echo "  ${SAFFRON}Vritti${RST} ${DIM}— AI for every Indian language${RST}"
 echo ""
