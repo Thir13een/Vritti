@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RUNTIME_ENV="/opt/ai-runtime/.env"
 AGENT_ENV="/opt/device-agent/.env"
-TOTAL_STEPS=7
+TOTAL_STEPS=8
 SECONDS=0
 
 # ── Color & formatting ───────────────────────────────────────────────────────
@@ -178,9 +178,57 @@ ok "System packages installed"
 info "Python version: ${BOLD}$(python3 --version 2>/dev/null)${RST}"
 step_done
 
-# ── Step 2: ai-runtime ──────────────────────────────────────────────────────
-step_header 2 "Installing ai-runtime"
-info "This is the core AI service. It runs a local Qwen 2B model and"
+# ── Step 2: Model selection ────────────────────────────────────────────────
+step_header 2 "Choose AI model"
+info "Pick the model that best fits your Pi's hardware."
+echo ""
+echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}[1]  qwen3.5:0.8b${RST}   ${DIM}(1.0 GB download)${RST}                     ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Runs on Pi Zero 2W, Pi 3, Pi 4 (1 GB+)${RST}          ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Fast inference, low memory usage${RST}                   ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Best for quick Q&A, simple tasks${RST}                   ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${YELLOW}⚠${RST} ${CREAM}Less accurate on complex reasoning${RST}                ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}[2]  qwen3.5:2b${RST}    ${DIM}(2.7 GB download)${RST}                     ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Better reasoning and language quality${RST}              ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Stronger multilingual support${RST}                      ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Recommended for Pi 4 (4 GB+) / Pi 5${RST}               ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${YELLOW}⚠${RST} ${CREAM}Slower on low-RAM devices, needs 4 GB+${RST}           ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}╰─────────────────────────────────────────────────────────────╯${RST}"
+echo ""
+
+# Detect available RAM to suggest a default
+TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)
+if [[ "$TOTAL_RAM_MB" -ge 3500 ]]; then
+  SUGGESTED=2
+  info "Detected ${BOLD}${WHITE}${TOTAL_RAM_MB} MB${RST}${CREAM} RAM — recommending ${BOLD}${WHITE}qwen3.5:2b${RST}"
+else
+  SUGGESTED=1
+  info "Detected ${BOLD}${WHITE}${TOTAL_RAM_MB} MB${RST}${CREAM} RAM — recommending ${BOLD}${WHITE}qwen3.5:0.8b${RST}"
+fi
+echo ""
+
+while true; do
+  printf "  ${SAFFRON}  ►  ${RST}${WHITE}Enter choice ${BOLD}[1]${RST}${WHITE} or ${BOLD}[2]${RST}${WHITE} (default: ${BOLD}${SUGGESTED}${RST}${WHITE}): ${RST}"
+  read -r MODEL_CHOICE </dev/tty
+  MODEL_CHOICE="${MODEL_CHOICE:-$SUGGESTED}"
+  case "$MODEL_CHOICE" in
+    1) SELECTED_MODEL="qwen3.5:0.8b"; break ;;
+    2) SELECTED_MODEL="qwen3.5:2b";   break ;;
+    *) warn "Please enter 1 or 2" ;;
+  esac
+done
+
+ok "Model selected" "${SELECTED_MODEL}"
+step_done
+
+# ── Step 3: ai-runtime ──────────────────────────────────────────────────────
+step_header 3 "Installing ai-runtime"
+info "This is the core AI service. It runs ${BOLD}${WHITE}${SELECTED_MODEL}${RST}${CREAM} locally and"
 info "handles chat requests on port 8000."
 echo ""
 
@@ -216,10 +264,14 @@ if [[ ! -f "$RUNTIME_ENV" ]]; then
 else
   ok "Runtime config exists" "$RUNTIME_ENV"
 fi
+
+doing "Setting model to ${SELECTED_MODEL}"
+upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
+ok "Model configured" "LOCAL_MODEL=${SELECTED_MODEL}"
 step_done
 
-# ── Step 3: device-agent ─────────────────────────────────────────────────────
-step_header 3 "Installing device-agent"
+# ── Step 4: device-agent ─────────────────────────────────────────────────────
+step_header 4 "Installing device-agent"
 info "The device agent sends a heartbeat to the server every 60 seconds"
 info "so the admin dashboard knows this Pi is online."
 echo ""
@@ -240,8 +292,8 @@ else
 fi
 step_done
 
-# ── Step 4: Device registration & token ──────────────────────────────────────
-step_header 4 "Device registration & token"
+# ── Step 5: Device registration & token ──────────────────────────────────────
+step_header 5 "Device registration & token"
 info "Each Pi needs a unique token to talk to the server. If the gateway"
 info "is reachable, we'll register automatically and get one."
 echo ""
@@ -311,8 +363,8 @@ else
 fi
 step_done
 
-# ── Step 5: systemd services ────────────────────────────────────────────────
-step_header 5 "Installing systemd services"
+# ── Step 6: systemd services ────────────────────────────────────────────────
+step_header 6 "Installing systemd services"
 info "Systemd will manage both services so they start automatically on boot"
 info "and restart if they crash."
 echo ""
@@ -335,8 +387,8 @@ sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/device-agent.service" \
 ok "device-agent.service installed" "/etc/systemd/system/"
 step_done
 
-# ── Step 6: Enable & start services ─────────────────────────────────────────
-step_header 6 "Enabling and starting services"
+# ── Step 7: Enable & start services ─────────────────────────────────────────
+step_header 7 "Enabling and starting services"
 info "Starting everything up and making sure it survives reboots."
 echo ""
 
@@ -367,8 +419,8 @@ else
 fi
 step_done
 
-# ── Step 7: Summary ─────────────────────────────────────────────────────────
-step_header 7 "Installation complete"
+# ── Step 8: Summary ─────────────────────────────────────────────────────────
+step_header 8 "Installation complete"
 
 ELAPSED=$SECONDS
 MINS=$((ELAPSED / 60))
@@ -393,6 +445,7 @@ echo "  ${RST}"
 section_box "Services Running" "$GREEN"
 echo ""
 result_line "ai-runtime:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8000"
+result_line "Model:" "${SELECTED_MODEL}"
 result_line "device-agent:" "Heartbeat → gateway every 60s"
 result_line "Chat UI:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8000/"
 echo ""
@@ -426,7 +479,7 @@ result_line "Agent config:" "/opt/device-agent/.env"
 echo ""
 info "Key settings in /opt/ai-runtime/.env:"
 echo "       ${DIM}LOCAL_BACKEND=llamacpp${RST}       ${DIM}# or ollama${RST}"
-echo "       ${DIM}LOCAL_MODEL=qwen3.5:2b${RST}"
+echo "       ${DIM}LOCAL_MODEL=${SELECTED_MODEL}${RST}"
 echo "       ${DIM}ALWAYS_USE_GATEWAY=true${RST}    ${DIM}# send every response to server for polish${RST}"
 echo ""
 
