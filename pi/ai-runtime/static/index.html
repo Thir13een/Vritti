@@ -2,70 +2,101 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
   <title>Vritti</title>
   <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
   <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: #0a0a0f;
-      color: #e4e4e7;
+    :root {
+      --bg: #0a0a0f;
+      --bg-panel: #12121a;
+      --bg-card: #1a1a24;
+      --saffron: #e87924;
+      --saffron-light: #f59e0b;
+      --saffron-grad: linear-gradient(135deg, var(--saffron), var(--saffron-light));
+      --text-main: #f5f5f5;
+      --text-muted: #a1a1aa;
+      --border: rgba(232, 121, 36, 0.15);
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    
+    body, html {
+      background: var(--bg);
+      color: var(--text-main);
       height: 100vh;
+      width: 100vw;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+    }
+
+    /* WhatsApp/Telegram chat background pattern (subtle) */
+    body::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.03;
+      background-image: radial-gradient(var(--saffron) 1px, transparent 1px);
+      background-size: 20px 20px;
+      z-index: -1;
     }
 
     /* ── Header ─────────────────────────────────────── */
     .header {
-      padding: 1rem 1.5rem;
-      background: linear-gradient(135deg, #1a1a24 0%, #12121a 100%);
-      border-bottom: 1px solid rgba(232, 121, 36, 0.15);
+      padding: 0.75rem 1.25rem;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.85rem;
       flex-shrink: 0;
+      z-index: 10;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
     .header .logo {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
       object-fit: cover;
       flex-shrink: 0;
+      border: 2px solid var(--saffron);
+      padding: 2px;
+    }
+    .header-text {
+      flex: 1;
     }
     .header-text h1 {
       font-size: 1.1rem;
       font-weight: 700;
-      color: #f5f5f5;
-      letter-spacing: 0.02em;
+      color: var(--text-main);
+      letter-spacing: 0.01em;
+      margin-bottom: 2px;
     }
     .header-text .sub {
-      font-size: 0.72rem;
-      color: #71717a;
-      letter-spacing: 0.04em;
+      font-size: 0.75rem;
+      color: var(--text-muted);
     }
     .header .dot {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: #22c55e;
-      margin-left: auto;
-      box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; }
     }
 
     /* ── Messages ───────────────────────────────────── */
     .messages {
       flex: 1;
       overflow-y: auto;
-      padding: 1.5rem;
+      padding: 1.5rem 1rem;
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
@@ -77,155 +108,217 @@
 
     .welcome {
       text-align: center;
-      padding: 3rem 1rem;
-      color: #52525b;
+      padding: 2rem 1rem;
+      margin: auto;
+      background: rgba(26, 26, 36, 0.4);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 1.5rem;
+      backdrop-filter: blur(8px);
+      max-width: 320px;
     }
     .welcome .brand {
-      font-size: 2rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #e87924, #f59e0b);
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: var(--saffron-grad);
+      background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
     }
-    .welcome p { font-size: 0.85rem; line-height: 1.6; }
+    .welcome p { font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.2rem; }
     .welcome .langs {
-      margin-top: 1rem;
       display: flex;
       gap: 0.5rem;
       justify-content: center;
       flex-wrap: wrap;
     }
     .welcome .lang-tag {
-      padding: 0.3rem 0.75rem;
+      padding: 0.4rem 0.8rem;
       border-radius: 2rem;
-      background: #1a1a24;
-      border: 1px solid #27272a;
+      background: rgba(232, 121, 36, 0.1);
+      border: 1px solid rgba(232, 121, 36, 0.2);
       font-size: 0.75rem;
-      color: #a1a1aa;
+      font-weight: 500;
+      color: var(--saffron-light);
     }
 
-    .msg { max-width: 80%; animation: fadeIn 0.25s ease-out; }
-    .msg.user { align-self: flex-end; }
-    .msg.assistant { align-self: flex-start; }
+    .msg { 
+      max-width: 85%; 
+      display: flex; 
+      flex-direction: column; 
+      animation: fadeInBottom 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; 
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    .msg.user { align-self: flex-end; align-items: flex-end; }
+    .msg.assistant { align-self: flex-start; align-items: flex-start; }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
+    @keyframes fadeInBottom {
       to { opacity: 1; transform: translateY(0); }
     }
 
     .msg .bubble {
       padding: 0.75rem 1rem;
-      font-size: 0.9rem;
-      line-height: 1.55;
+      font-size: 0.95rem;
+      line-height: 1.5;
       white-space: pre-wrap;
       word-break: break-word;
+      position: relative;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     .msg.user .bubble {
-      background: linear-gradient(135deg, #e87924, #d96b18);
+      background: var(--saffron-grad);
       color: #fff;
-      border-radius: 1.25rem 1.25rem 0.35rem 1.25rem;
+      border-radius: 1.25rem 0.25rem 1.25rem 1.25rem;
     }
     .msg.assistant .bubble {
-      background: #1a1a24;
-      color: #e4e4e7;
-      border: 1px solid #27272a;
-      border-radius: 1.25rem 1.25rem 1.25rem 0.35rem;
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 0.25rem 1.25rem 1.25rem 1.25rem;
+    }
+
+    /* Chat Tails */
+    .msg.user .bubble::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: -8px;
+      width: 16px;
+      height: 16px;
+      background: var(--saffron-light); /* Approximate right side of gradient */
+      clip-path: polygon(0 0, 0 100%, 100% 0);
+      border-radius: 0 4px 0 0;
+    }
+    .msg.assistant .bubble::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -8px;
+      width: 16px;
+      height: 16px;
+      background: var(--bg-card);
+      clip-path: polygon(100% 0, 0 0, 100% 100%);
+      border-radius: 4px 0 0 0;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      border-left: 1px solid rgba(255,255,255,0.05);
     }
 
     .msg .meta {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.5rem;
       font-size: 0.65rem;
-      color: #52525b;
+      color: var(--text-muted);
       margin-top: 0.35rem;
       padding: 0 0.25rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
-    .msg.user .meta { justify-content: flex-end; }
 
     /* ── Typing indicator ───────────────────────────── */
     .typing { align-self: flex-start; }
     .typing .bubble {
-      background: #1a1a24;
-      border: 1px solid #27272a;
-      border-radius: 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 0.25rem 1.25rem 1.25rem 1.25rem;
       padding: 0.85rem 1.25rem;
       display: flex;
-      gap: 4px;
+      gap: 5px;
       align-items: center;
+      min-height: 40px;
+    }
+    .typing .bubble::after {
+      background: var(--bg-card);
     }
     .typing .bubble span {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #e87924;
-      animation: bounce 1.2s ease-in-out infinite;
+      background: var(--saffron);
+      animation: typingBounce 1.4s infinite ease-in-out both;
     }
-    .typing .bubble span:nth-child(2) { animation-delay: 0.15s; }
-    .typing .bubble span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-      30% { transform: translateY(-6px); opacity: 1; }
+    .typing .bubble span:nth-child(1) { animation-delay: -0.32s; }
+    .typing .bubble span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typingBounce {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
     }
 
     /* ── Input area ─────────────────────────────────── */
+    .input-wrapper {
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 0.75rem 1rem 1rem;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    
+    .status {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
     .input-area {
-      padding: 1rem 1.5rem 1.25rem;
-      background: #0f0f15;
-      border-top: 1px solid rgba(232, 121, 36, 0.1);
       display: flex;
       gap: 0.75rem;
       align-items: flex-end;
-      flex-shrink: 0;
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 1.5rem;
+      padding: 0.4rem 0.4rem 0.4rem 1.2rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
+    .input-area:focus-within {
+      border-color: var(--saffron);
+      box-shadow: 0 0 0 2px rgba(232, 121, 36, 0.15);
+    }
+
     .input-area textarea {
       flex: 1;
-      min-height: 46px;
-      max-height: 140px;
-      padding: 0.7rem 1rem;
-      border: 1px solid #27272a;
-      border-radius: 1rem;
-      background: #1a1a24;
-      color: #e4e4e7;
+      min-height: 24px;
+      max-height: 120px;
+      padding: 0.6rem 0;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
       font: inherit;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       resize: none;
-      line-height: 1.5;
-      transition: border-color 0.2s;
+      line-height: 1.4;
     }
-    .input-area textarea::placeholder { color: #52525b; }
-    .input-area textarea:focus {
-      outline: none;
-      border-color: #e87924;
-      box-shadow: 0 0 0 2px rgba(232, 121, 36, 0.1);
-    }
+    .input-area textarea::placeholder { color: #71717a; }
+    .input-area textarea:focus { outline: none; }
+    
     .input-area button {
-      width: 46px;
-      height: 46px;
+      width: 40px;
+      height: 40px;
       border: none;
       border-radius: 50%;
-      background: linear-gradient(135deg, #e87924, #d96b18);
+      background: var(--saffron-grad);
       color: #fff;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.15s, opacity 0.2s;
+      transition: transform 0.15s, opacity 0.2s, box-shadow 0.2s;
       flex-shrink: 0;
+      box-shadow: 0 4px 10px rgba(232, 121, 36, 0.3);
     }
-    .input-area button:hover { transform: scale(1.05); }
-    .input-area button:active { transform: scale(0.95); }
-    .input-area button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-    .input-area button svg { width: 20px; height: 20px; }
+    .input-area button:hover:not(:disabled) { 
+      transform: scale(1.05); 
+      box-shadow: 0 6px 14px rgba(232, 121, 36, 0.4);
+    }
+    .input-area button:active:not(:disabled) { transform: scale(0.95); }
+    .input-area button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; background: #3f3f46; }
+    .input-area button svg { width: 18px; height: 18px; position: relative; left: -1px; }
 
-    /* ── Status bar ──────────────────────────────────── */
-    .status {
-      font-size: 0.68rem;
-      color: #3f3f46;
-      padding: 0 1.5rem 0.5rem;
-      flex-shrink: 0;
-      text-align: center;
-    }
   </style>
 </head>
 <body>
@@ -241,25 +334,26 @@
   <div class="messages" id="messages">
     <div class="welcome">
       <div class="brand">Vritti</div>
-      <p>Ask me anything in your language.</p>
+      <p>Ask me anything in your language.<br/>I'm here to help.</p>
       <div class="langs">
-        <span class="lang-tag">English</span>
-        <span class="lang-tag">Hindi</span>
+        <span class="lang-tag">Eng</span>
+        <span class="lang-tag">हिन्दी</span>
         <span class="lang-tag">Hinglish</span>
       </div>
     </div>
   </div>
 
-  <div class="status" id="status">Ready</div>
-
-  <div class="input-area">
-    <textarea id="prompt" placeholder="Type your message..." rows="1"></textarea>
-    <button type="button" id="send" title="Send">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13" />
-        <polygon points="22 2 15 22 11 13 2 9 22 2" />
-      </svg>
-    </button>
+  <div class="input-wrapper">
+    <div class="status" id="status">Ready</div>
+    <div class="input-area">
+      <textarea id="prompt" placeholder="Message Vritti..." rows="1"></textarea>
+      <button type="button" id="send" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13" />
+          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+        </svg>
+      </button>
+    </div>
   </div>
 
   <script>
@@ -314,7 +408,7 @@
     // Auto-resize textarea
     promptEl.addEventListener('input', () => {
       promptEl.style.height = 'auto';
-      promptEl.style.height = Math.min(promptEl.scrollHeight, 140) + 'px';
+      promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + 'px';
     });
 
     async function send() {
@@ -351,7 +445,7 @@
         addMessage('assistant', 'Network error: ' + e.message, null);
         setStatus('Connection lost');
         statusDot.style.background = '#ef4444';
-        statusDot.style.boxShadow = '0 0 6px rgba(239,68,68,0.4)';
+        statusDot.style.boxShadow = '0 0 8px rgba(239,68,68,0.5)';
       } finally {
         sendBtn.disabled = false;
         promptEl.focus();
@@ -360,7 +454,11 @@
 
     sendBtn.addEventListener('click', send);
     promptEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      if (e.key === 'Enter' && !e.shiftKey) { 
+        // Mobile simple submit fix
+        e.preventDefault(); 
+        send(); 
+      }
     });
 
     // Health check — update status dot
@@ -370,16 +468,16 @@
         const data = await res.json();
         if (data.status === 'ok') {
           statusDot.style.background = '#22c55e';
-          statusDot.style.boxShadow = '0 0 6px rgba(34,197,94,0.4)';
+          statusDot.style.boxShadow = '0 0 8px rgba(34,197,94,0.5)';
           statusDot.title = 'Online — backend reachable';
         } else {
           statusDot.style.background = '#f59e0b';
-          statusDot.style.boxShadow = '0 0 6px rgba(245,158,11,0.4)';
+          statusDot.style.boxShadow = '0 0 8px rgba(245,158,11,0.5)';
           statusDot.title = 'Local model offline — using API';
         }
       } catch {
         statusDot.style.background = '#ef4444';
-        statusDot.style.boxShadow = '0 0 6px rgba(239,68,68,0.4)';
+        statusDot.style.boxShadow = '0 0 8px rgba(239,68,68,0.5)';
         statusDot.title = 'Offline';
       }
     }
