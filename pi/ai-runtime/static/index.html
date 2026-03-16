@@ -297,7 +297,7 @@
       let metaHtml = '';
       if (meta && (meta.source || meta.api_polished !== undefined)) {
         metaHtml = '<div class="meta">';
-        if (meta.source) metaHtml += '<span>' + (meta.source === 'gateway' ? 'polished via API' : meta.source === 'local' ? 'local model' : meta.source) + '</span>';
+        if (meta.source) metaHtml += '<span>' + (meta.source === 'gateway' ? '⚡ gateway' : meta.source === 'local' ? '📡 local model' : meta.source) + '</span>';
         metaHtml += '</div>';
       }
       div.innerHTML = '<div class="bubble">' + escapeHtml(text) + '</div>' + metaHtml;
