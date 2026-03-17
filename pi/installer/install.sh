@@ -304,7 +304,33 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
   fi
   upsert_env "$AGENT_ENV" "DEVICE_ID" "$DEVICE_ID"
 
-  if [[ -n "${REGISTER_URL}" && -n "${BOOTSTRAP_SECRET}" ]]; then
+  # Ask for bootstrap secret if not already configured
+  if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
+    echo ""
+    echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}Device Registration${RST}                                       ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}To register this Pi, you need the device secret${RST}         ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}from your gateway dashboard or server .env file.${RST}        ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Find it at: dashboard → Settings → Device Secret${RST}        ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Or in: cloud/gateway/.env → DEVICE_REGISTER_SECRET${RST}      ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${YELLOW}Press Enter to skip (gateway will be disabled)${RST}         ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}╰─────────────────────────────────────────────────────────────╯${RST}"
+    echo ""
+    printf "  ${SAFFRON}  ►  ${RST}${WHITE}Paste device secret: ${RST}"
+    read -r BOOTSTRAP_SECRET </dev/tty
+    BOOTSTRAP_SECRET="${BOOTSTRAP_SECRET// /}"
+    if [[ -n "${BOOTSTRAP_SECRET}" ]]; then
+      upsert_env "$RUNTIME_ENV" "GATEWAY_BOOTSTRAP_SECRET" "$BOOTSTRAP_SECRET"
+      ok "Device secret saved"
+    fi
+  fi
+
+  if [[ -n "${REGISTER_URL}" && -n "${BOOTSTRAP_SECRET}" && "${BOOTSTRAP_SECRET}" != "replace_with_bootstrap_secret" ]]; then
     doing "Registering device with gateway"
     info "Register URL: ${REGISTER_URL}"
     info "Device ID: ${DEVICE_ID}"
@@ -321,7 +347,11 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
       TOKEN_SOURCE="gateway"
     fi
   else
-    info "No GATEWAY_REGISTER_URL or GATEWAY_BOOTSTRAP_SECRET configured"
+    if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
+      info "No device secret provided — skipping gateway registration"
+    else
+      info "No GATEWAY_REGISTER_URL configured"
+    fi
     TOKEN="replace_with_device_token"
     TOKEN_SOURCE="not_configured"
   fi
