@@ -338,7 +338,7 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
     echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}from your gateway dashboard or server .env file.${RST}        ${BOLD}${SAFFRON}│${RST}"
     echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
     echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Find it at: dashboard → Settings → Device Secret${RST}        ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Or in: cloud/gateway/.env → DEVICE_REGISTER_SECRET${RST}      ${BOLD}${SAFFRON}│${RST}"
+    echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Or in: gateway server .env → DEVICE_REGISTER_SECRET${RST}     ${BOLD}${SAFFRON}│${RST}"
     echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
     echo "  ${BOLD}${SAFFRON}│${RST}   ${YELLOW}Press Enter to skip (gateway will be disabled)${RST}         ${BOLD}${SAFFRON}│${RST}"
     echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
