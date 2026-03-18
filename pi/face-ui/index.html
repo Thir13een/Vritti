@@ -171,7 +171,11 @@ transDuration = (fromError && newState === 'idle') ? 1.5 : (TRANS_DURATIONS[newS
   if (newState === 'error') errorTimer = 0;
 }
 
-window.vritti = { setState, getState: () => state };
+// Amplitude (0-1) from audio, smoothed
+let amp = 0, ampTarget = 0;
+function setAmplitude(v) { ampTarget = Math.max(0, Math.min(1, v)); }
+
+window.vritti = { setState, getState: () => state, setAmplitude };
 
 function blend(dt) {
   if (transBlend < 1) {
@@ -595,6 +599,28 @@ function frame(timestamp) {
 
   blend(dt);
 
+  // Smooth amplitude toward target
+  amp += (ampTarget - amp) * Math.min(1, dt * 12);
+
+  // Amplitude modulation on top of blended params
+  if (amp > 0.01) {
+    const a = amp;
+    cur.coreR += a * 8;
+    cur.coreGlow += a * 0.3;
+    cur.breathe += a * 0.03;
+    cur.dotPulse += a * 0.3;
+    cur.blobScale += a * 0.2;
+    if (state === 'speaking') {
+      cur.waveAlpha += a * 0.15;
+      cur.waveSpeed += a * 0.8;
+    }
+    if (state === 'listening') {
+      cur.ring1Alpha += a * 0.15;
+      cur.ring2Alpha += a * 0.1;
+      cur.yantraAlpha += a * 0.1;
+    }
+  }
+
   const breathe = 1
     + Math.sin(t * 1.1) * cur.breathe
     + Math.sin(t * 2.7 + 0.4) * cur.breathe2;
@@ -651,10 +677,77 @@ function frame(timestamp) {
 }
 requestAnimationFrame(frame);
 
+// Mic test mode — click anywhere to start
+let testMode = false;
+canvas.style.cursor = 'pointer';
+canvas.addEventListener('click', async () => {
+  if (testMode) return;
+  testMode = true;
+  canvas.style.cursor = 'none';
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const audioCtx = new AudioContext();
+  const src = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.4;
+  src.connect(analyser);
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+
+  let silenceTimer = 0;
+  let speaking = false;
+  const SILENCE_THRESHOLD = 0.08;
+  const SPEECH_THRESHOLD = 0.12;
+
+  function poll() {
+    analyser.getByteFrequencyData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i];
+    const rms = sum / (buf.length * 255);
+
+    setAmplitude(rms * 3);
+
+    if (state === 'idle' && rms > SPEECH_THRESHOLD) {
+      setState('listening');
+      speaking = true;
+      silenceTimer = 0;
+    } else if (state === 'listening') {
+      if (rms < SILENCE_THRESHOLD) {
+        silenceTimer += 1 / 60;
+        if (silenceTimer > 0.8) {
+          speaking = false;
+          setState('thinking');
+          setAmplitude(0);
+          setTimeout(() => {
+            setState('speaking');
+            // Simulate speaking with pulsing amplitude
+            let sp = 0;
+            const spk = setInterval(() => {
+              sp += 0.05;
+              const fakeAmp = 0.3 + 0.3 * Math.sin(sp * 8) * Math.sin(sp * 3);
+              setAmplitude(Math.max(0, fakeAmp));
+              if (sp > 3) {
+                clearInterval(spk);
+                setAmplitude(0);
+                setState('idle');
+              }
+            }, 33);
+          }, 1500);
+        }
+      } else {
+        silenceTimer = 0;
+      }
+    }
+
+    requestAnimationFrame(poll);
+  }
+  poll();
+}, { once: true });
+
 // Health check
 async function checkHealth() {
   try {
-    const res = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(5000) });
+    const res = await fetch('/health', { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error();
     const data = await res.json();
     healthDot.className = (data.status === 'ok' || data.status === 'degraded') ? 'green' : 'yellow';
@@ -662,6 +755,17 @@ async function checkHealth() {
 }
 checkHealth();
 setInterval(checkHealth, 30000);
+
+// Poll state from voice pipeline
+async function pollState() {
+  try {
+    const res = await fetch('/v1/state', { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.state && data.state !== state) setState(data.state);
+  } catch {}
+}
+setInterval(pollState, 200);
 </script>
 </body>
 </html>
