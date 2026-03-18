@@ -34,6 +34,15 @@ class ChatRequest(BaseModel):
     prompt: str = Field(..., max_length=50_000)
 
 
+@app.get("/v1/state")
+def get_state() -> dict:
+    """Return current face state set by voice pipeline."""
+    try:
+        return {"state": Path("/tmp/vritti-state").read_text().strip()}
+    except FileNotFoundError:
+        return {"state": "idle"}
+
+
 @app.get("/health")
 def health() -> dict:
     result: dict[str, str] = {"status": "ok"}
@@ -58,7 +67,11 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
     return generate(cfg, req.prompt.strip())
 
 
-# Serve chat UI
-static_dir = Path(__file__).resolve().parent / "static"
+# Serve face UI (mandala)
+# /opt/face-ui (installed) → ../face-ui (dev) → ./static (fallback)
+_opt_face = Path("/opt/face-ui")
+_dev_face = Path(__file__).resolve().parent.parent / "face-ui"
+_static = Path(__file__).resolve().parent / "static"
+static_dir = _opt_face if _opt_face.exists() else (_dev_face if _dev_face.exists() else _static)
 if static_dir.exists():
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")

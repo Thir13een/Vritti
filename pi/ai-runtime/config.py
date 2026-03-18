@@ -20,6 +20,8 @@ class RuntimeConfig:
     force_local_only: bool = False
     local_timeout_seconds: int = 60
     gateway_timeout_seconds: int = 30
+    # Gateway base for STT/TTS proxying
+    gateway_base: str = ""
 
     @staticmethod
     def from_env() -> "RuntimeConfig":
@@ -46,4 +48,5 @@ class RuntimeConfig:
             force_local_only=local_only.strip().lower() in ("1", "true", "yes"),
             local_timeout_seconds=local_timeout,
             gateway_timeout_seconds=gateway_timeout,
+            gateway_base=os.getenv("GATEWAY_URL", "").strip().replace("/v1/chat", ""),
         )
