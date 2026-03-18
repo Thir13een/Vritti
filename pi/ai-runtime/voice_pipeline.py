@@ -233,11 +233,11 @@ def speak(text: str):
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        audio_mp3 = resp.read()
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        audio_data = resp.read()
 
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-        f.write(audio_mp3)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        f.write(audio_data)
         tmp_path = f.name
 
     try:
