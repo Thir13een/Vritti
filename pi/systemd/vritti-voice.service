@@ -1,0 +1,24 @@
+[Unit]
+Description=Vritti Voice Pipeline
+After=ai-runtime.service
+Requires=ai-runtime.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/ai-runtime
+EnvironmentFile=/opt/ai-runtime/.env
+ExecStart=/opt/ai-runtime/.venv/bin/python voice_pipeline.py
+Restart=always
+RestartSec=5
+
+# Needs access to audio devices and state file
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ai-runtime /tmp
+ProtectHome=false
+SupplementaryGroups=audio
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

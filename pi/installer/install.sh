@@ -156,6 +156,12 @@ info "Source directory : ${BOLD}${WHITE}${REPO_DIR}${RST}"
 info "Hostname         : ${BOLD}${WHITE}$(hostname)${RST}"
 info "Time             : $(date '+%Y-%m-%d %H:%M:%S')"
 
+# Detect non-root user early (needed for chown in later steps)
+PI_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
+if ! id "$PI_USER" &>/dev/null; then
+  PI_USER="pi"
+fi
+
 # Step 1: System packages
 step_header 1 "Installing system packages"
 info "Installing Python, pip, curl."
@@ -233,11 +239,18 @@ cp "${REPO_DIR}/ai-runtime/"*.py /opt/ai-runtime/
 cp "${REPO_DIR}/ai-runtime/requirements.txt" /opt/ai-runtime/
 ok "Copied Python files" "config.py, runtime.py, server.py"
 
+if [[ -d "${REPO_DIR}/face-ui" ]]; then
+  doing "Copying face UI (mandala)"
+  mkdir -p /opt/face-ui
+  cp -r "${REPO_DIR}/face-ui/." /opt/face-ui/
+  ok "Face UI copied" "/opt/face-ui"
+fi
+
 if [[ -d "${REPO_DIR}/ai-runtime/static" ]]; then
-  doing "Copying chat UI static files"
+  doing "Copying static files"
   mkdir -p /opt/ai-runtime/static
   cp -r "${REPO_DIR}/ai-runtime/static/." /opt/ai-runtime/static/
-  ok "Static files copied" "local web chat UI"
+  ok "Static files copied" "fallback UI"
 fi
 
 doing "Creating Python virtual environment"
@@ -257,6 +270,11 @@ if [[ ! -f "$RUNTIME_ENV" ]]; then
 else
   ok "Runtime config exists" "$RUNTIME_ENV"
 fi
+
+doing "Securing .env file permissions"
+chown "${PI_USER}:${PI_USER}" "$RUNTIME_ENV"
+chmod 600 "$RUNTIME_ENV"
+ok "Runtime .env secured" "owner-only read/write (600)"
 
 doing "Setting model to ${SELECTED_MODEL}"
 upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
@@ -282,6 +300,11 @@ if [[ ! -f "$AGENT_ENV" ]]; then
 else
   ok "Agent config exists" "$AGENT_ENV"
 fi
+
+doing "Securing .env file permissions"
+chown "${PI_USER}:${PI_USER}" "$AGENT_ENV"
+chmod 600 "$AGENT_ENV"
+ok "Agent .env secured" "owner-only read/write (600)"
 step_done
 
 # Step 5: Device registration
@@ -388,11 +411,6 @@ step_header 6 "Installing systemd services"
 info "Auto-start on boot, auto-restart on crash."
 echo ""
 
-# Detect non-root user
-PI_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
-if ! id "$PI_USER" &>/dev/null; then
-  PI_USER="pi"
-fi
 info "Services will run as user: ${BOLD}${PI_USER}${RST}"
 
 doing "Copying ai-runtime.service"
@@ -404,6 +422,29 @@ doing "Copying device-agent.service"
 sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/device-agent.service" \
   > /etc/systemd/system/device-agent.service
 ok "device-agent.service installed" "/etc/systemd/system/"
+
+doing "Copying vritti-kiosk.service"
+sed -e "s/^User=.*/User=${PI_USER}/" \
+    -e "s|/home/pi|/home/${PI_USER}|g" \
+    "${REPO_DIR}/systemd/vritti-kiosk.service" \
+  > /etc/systemd/system/vritti-kiosk.service
+ok "vritti-kiosk.service installed" "fullscreen mandala on boot"
+
+doing "Copying vritti-voice.service"
+sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/vritti-voice.service" \
+  > /etc/systemd/system/vritti-voice.service
+ok "vritti-voice.service installed" "mic → STT → chat → TTS → speaker"
+
+doing "Disabling screen blanking"
+if command -v xset &>/dev/null; then
+  su - "${PI_USER}" -c "DISPLAY=:0 xset s off -dpms" 2>/dev/null || true
+fi
+# Persist via lightdm config
+LIGHTDM_CONF="/etc/lightdm/lightdm.conf"
+if [[ -f "$LIGHTDM_CONF" ]] && ! grep -q "xserver-command.*-s 0" "$LIGHTDM_CONF" 2>/dev/null; then
+  sed -i '/^\[Seat:\*\]/a xserver-command=X -s 0 -dpms' "$LIGHTDM_CONF" 2>/dev/null || true
+fi
+ok "Screen blanking disabled" "display stays on"
 step_done
 
 # Step 7: Start services
@@ -415,9 +456,9 @@ doing "Reloading systemd daemon"
 systemctl daemon-reload
 ok "systemd reloaded"
 
-doing "Enabling ai-runtime and device-agent for auto-start on boot"
-systemctl enable ai-runtime device-agent 2>&1 | stream_progress
-ok "Services enabled" "auto-start on boot"
+doing "Enabling services for auto-start on boot"
+systemctl enable ai-runtime device-agent vritti-kiosk vritti-voice 2>&1 | stream_progress
+ok "Services enabled" "ai-runtime, device-agent, kiosk, voice"
 
 doing "Starting ai-runtime"
 systemctl restart ai-runtime
@@ -435,6 +476,15 @@ if systemctl is-active --quiet device-agent; then
   ok "device-agent is running" "heartbeat every 60s"
 else
   warn "device-agent may not have started, check the logs below"
+fi
+
+doing "Starting vritti-voice"
+systemctl restart vritti-voice
+sleep 1
+if systemctl is-active --quiet vritti-voice; then
+  ok "vritti-voice is running" "voice pipeline active"
+else
+  warn "vritti-voice may not have started (needs mic + API keys)"
 fi
 step_done
 
@@ -466,7 +516,8 @@ echo ""
 result_line "ai-runtime:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8000"
 result_line "Model:" "${SELECTED_MODEL}"
 result_line "device-agent:" "Heartbeat → gateway every 60s"
-result_line "Chat UI:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8000/"
+result_line "Face UI:" "fullscreen kiosk (Chromium)"
+result_line "Voice pipeline:" "mic → STT → chat → TTS → speaker"
 echo ""
 
 section_box "Device Token" "$BLUE"
@@ -507,8 +558,9 @@ echo ""
 echo "  ${DIM}Test chat     ${RST} curl -s http://127.0.0.1:8000/v1/chat -H 'Content-Type: application/json' -d '{\"prompt\":\"Hello\"}'"
 echo "  ${DIM}Runtime logs  ${RST} sudo journalctl -u ai-runtime -n 100 -f"
 echo "  ${DIM}Agent logs    ${RST} sudo journalctl -u device-agent -n 100 -f"
-echo "  ${DIM}Restart       ${RST} sudo systemctl restart ai-runtime device-agent"
-echo "  ${DIM}Status        ${RST} sudo systemctl status ai-runtime device-agent"
+echo "  ${DIM}Voice logs    ${RST} sudo journalctl -u vritti-voice -n 100 -f"
+echo "  ${DIM}Restart       ${RST} sudo systemctl restart ai-runtime device-agent vritti-voice"
+echo "  ${DIM}Status        ${RST} sudo systemctl status ai-runtime device-agent vritti-voice"
 echo ""
 divider
 echo ""
