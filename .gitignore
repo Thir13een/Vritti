@@ -10,12 +10,10 @@ node_modules/
 
 # Environment & secrets
 .env
-cloud/gateway/.env
-cloud/gateway/CREDENTIALS.txt
-install.log
 
 # IDE / tools
 .claude/
+.cursor/
 .pytest_cache/
 .DS_Store
 *.swp
