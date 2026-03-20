@@ -36,7 +36,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/v1/state")
 def get_state() -> dict:
-    """Return current face state set by voice pipeline."""
+    """Current face state from voice pipeline."""
     try:
         return {"state": Path("/tmp/vritti-state").read_text().strip()}
     except FileNotFoundError:
@@ -67,8 +67,7 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
     return generate(cfg, req.prompt.strip())
 
 
-# Serve face UI (mandala)
-# /opt/face-ui (installed) → ../face-ui (dev) → ./static (fallback)
+# Face UI static files
 _opt_face = Path("/opt/face-ui")
 _dev_face = Path(__file__).resolve().parent.parent / "face-ui"
 _static = Path(__file__).resolve().parent / "static"

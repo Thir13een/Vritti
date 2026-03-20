@@ -1,16 +1,10 @@
-"""Vritti Voice Pipeline — mic → gateway STT → gateway chat → gateway TTS → speaker.
-
-Thin client: all AI processing happens on the gateway.
-Pi only handles mic capture, VAD, audio playback, and mandala state.
-"""
+"""Voice pipeline: mic → VAD → local chat."""
 from __future__ import annotations
 
 import io
 import json
 import logging
 import os
-import subprocess
-import tempfile
 import time
 import urllib.request
 import wave
@@ -26,12 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("voice")
 
-# Gateway URL (all STT/TTS/chat goes through gateway)
-GATEWAY_BASE = os.getenv("GATEWAY_URL", "").strip().replace("/v1/chat", "").rstrip("/")
-GATEWAY_TOKEN = os.getenv("GATEWAY_DEVICE_TOKEN", "").strip()
-DEVICE_ID = os.getenv("DEVICE_ID", "").strip()
-
-# Local runtime (for health check and state)
+# Local runtime
 LOCAL_API = os.getenv("API_BASE", "http://127.0.0.1:8000")
 
 # Audio settings
@@ -47,32 +36,12 @@ SILENCE_END_SECONDS = 1.2
 MIN_RECORDING_SECONDS = 0.5
 
 
-def _gw_headers() -> dict[str, str]:
-    """Headers for gateway requests (auth + device ID)."""
-    h: dict[str, str] = {"Content-Type": "application/json"}
-    if GATEWAY_TOKEN:
-        h["Authorization"] = f"Bearer {GATEWAY_TOKEN}"
-    if DEVICE_ID:
-        h["x-device-id"] = DEVICE_ID
-    return h
-
-
-def _gw_auth_headers() -> dict[str, str]:
-    """Auth headers without Content-Type (for multipart)."""
-    h: dict[str, str] = {}
-    if GATEWAY_TOKEN:
-        h["Authorization"] = f"Bearer {GATEWAY_TOKEN}"
-    if DEVICE_ID:
-        h["x-device-id"] = DEVICE_ID
-    return h
-
-
 # ── Face UI state control ──
 STATE_FILE = Path("/tmp/vritti-state")
 
 
 def set_face_state(state: str):
-    """Set mandala state via state file."""
+    """Update mandala face state."""
     STATE_FILE.write_text(state)
     logger.info(f"state → {state}")
 
@@ -80,7 +49,7 @@ def set_face_state(state: str):
 # ── Silero VAD ──
 
 def load_vad_model():
-    """Load Silero VAD model (downloads ~2MB on first run)."""
+    """Load Silero VAD model."""
     logger.info("loading Silero VAD model...")
     model, utils = torch.hub.load(
         repo_or_dir="snakers4/silero-vad",
@@ -92,7 +61,7 @@ def load_vad_model():
 
 
 def is_speech(model, audio_chunk: bytes) -> bool:
-    """Check if audio chunk contains speech using Silero VAD."""
+    """Check if audio chunk contains speech."""
     samples = np.frombuffer(audio_chunk, dtype=np.int16).astype(np.float32) / 32768.0
     tensor = torch.from_numpy(samples)
     confidence = model(tensor, RATE).item()
@@ -172,103 +141,14 @@ def record_until_silence(vad_model) -> bytes | None:
     return buf.getvalue()
 
 
-def transcribe(audio_wav: bytes) -> str:
-    """Send audio to gateway STT."""
-    set_face_state("listening")
-
-    boundary = "----VrittiAudioBoundary"
-    body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n'
-        f"Content-Type: audio/wav\r\n\r\n"
-    ).encode() + audio_wav + f"\r\n--{boundary}--\r\n".encode()
-
-    headers = _gw_auth_headers()
-    headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
-
-    req = urllib.request.Request(
-        f"{GATEWAY_BASE}/v1/stt",
-        data=body,
-        headers=headers,
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
-    transcript = data.get("transcript", "").strip()
-    logger.info(f"transcript: {transcript[:80]}")
-    return transcript
-
-
-def chat(prompt: str) -> str:
-    """Send prompt to gateway chat."""
-    set_face_state("thinking")
-
-    payload = json.dumps({"prompt": prompt}).encode()
-    headers = _gw_headers()
-
-    req = urllib.request.Request(
-        f"{GATEWAY_BASE}/v1/chat",
-        data=payload,
-        headers=headers,
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        data = json.loads(resp.read())
-    answer = data.get("answer", "").strip()
-    logger.info(f"answer: {answer[:80]}")
-    return answer
-
-
-def speak(text: str):
-    """Send text to gateway TTS and play through speakers."""
-    set_face_state("speaking")
-
-    payload = json.dumps({"text": text}).encode()
-    headers = _gw_headers()
-
-    req = urllib.request.Request(
-        f"{GATEWAY_BASE}/v1/tts",
-        data=payload,
-        headers=headers,
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        audio_data = resp.read()
-
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        f.write(audio_data)
-        tmp_path = f.name
-
-    try:
-        for player in ["mpv --no-video --really-quiet", "ffplay -nodisp -autoexit -loglevel quiet"]:
-            cmd = player.split() + [tmp_path]
-            try:
-                subprocess.run(cmd, check=True, timeout=120)
-                break
-            except (FileNotFoundError, subprocess.SubprocessError):
-                continue
-        else:
-            logger.error("no audio player found — install mpv or ffmpeg")
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
-
-
 def pipeline_loop():
     """Main voice pipeline loop."""
     logger.info("voice pipeline started")
-    logger.info(f"gateway: {GATEWAY_BASE}")
-    logger.info(f"device: {DEVICE_ID}")
     logger.info(f"VAD threshold: {VAD_THRESHOLD}")
 
-    if not GATEWAY_BASE:
-        logger.error("GATEWAY_URL not set — cannot reach gateway")
-        return
-
-    # Load Silero VAD
     vad_model = load_vad_model()
 
-    # Wait for local runtime (serves face UI)
+    # Wait for local runtime
     for _ in range(30):
         try:
             urllib.request.urlopen(f"{LOCAL_API}/health", timeout=3)
@@ -286,20 +166,7 @@ def pipeline_loop():
             if not audio:
                 continue
 
-            transcript = transcribe(audio)
-            if not transcript:
-                logger.info("empty transcript, ignoring")
-                set_face_state("idle")
-                continue
-
-            answer = chat(transcript)
-            if not answer:
-                logger.warning("empty answer")
-                set_face_state("error")
-                time.sleep(2)
-                continue
-
-            speak(answer)
+            logger.info("audio captured, ready for processing")
             set_face_state("idle")
 
         except KeyboardInterrupt:

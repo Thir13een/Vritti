@@ -433,7 +433,7 @@ ok "vritti-kiosk.service installed" "fullscreen mandala on boot"
 doing "Copying vritti-voice.service"
 sed "s/^User=.*/User=${PI_USER}/" "${REPO_DIR}/systemd/vritti-voice.service" \
   > /etc/systemd/system/vritti-voice.service
-ok "vritti-voice.service installed" "mic → STT → chat → TTS → speaker"
+ok "vritti-voice.service installed" "mic → VAD → local chat"
 
 doing "Disabling screen blanking"
 if command -v xset &>/dev/null; then
@@ -517,7 +517,7 @@ result_line "ai-runtime:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' |
 result_line "Model:" "${SELECTED_MODEL}"
 result_line "device-agent:" "Heartbeat → gateway every 60s"
 result_line "Face UI:" "fullscreen kiosk (Chromium)"
-result_line "Voice pipeline:" "mic → STT → chat → TTS → speaker"
+result_line "Voice pipeline:" "mic → VAD → local chat"
 echo ""
 
 section_box "Device Token" "$BLUE"

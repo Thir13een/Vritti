@@ -14,13 +14,11 @@ class RuntimeConfig:
     gateway_device_token: str = ""
     device_id: str = ""
     num_ctx: int = 1024
-    # Try gateway first, local model as backup
     gateway_first: bool = True
     max_tokens: int = 512
     force_local_only: bool = False
     local_timeout_seconds: int = 60
     gateway_timeout_seconds: int = 30
-    # Gateway base for STT/TTS proxying
     gateway_base: str = ""
 
     @staticmethod
@@ -30,7 +28,6 @@ class RuntimeConfig:
         local_timeout = max(1, int(os.getenv("LOCAL_TIMEOUT_SECONDS", "60")))
         gateway_timeout = max(1, int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "30")))
 
-        # Read new env vars with backward-compatible fallbacks
         gw_first = os.getenv("GATEWAY_FIRST", os.getenv("ALWAYS_USE_GATEWAY", "true"))
         local_only = os.getenv("FORCE_LOCAL_ONLY", os.getenv("FORCE_FALLBACK", "false"))
 

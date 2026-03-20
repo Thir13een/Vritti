@@ -128,11 +128,9 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
 
     gateway_configured = bool(cfg.gateway_url and cfg.gateway_device_token)
 
-    # Force local only — skip gateway entirely
     if cfg.force_local_only:
         return _generate_local(cfg, prompt)
 
-    # Gateway-first (default)
     if cfg.gateway_first and gateway_configured:
         try:
             answer = gateway_chat(cfg, prompt)
@@ -149,10 +147,8 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
         except RuntimeError as exc:
             logger.warning("gateway failed, falling back to local", extra={"error": str(exc)})
 
-        # Gateway failed or empty — fall back to local
         return _generate_local(cfg, prompt)
 
-    # Gateway not configured or gateway_first=False — use local
     return _generate_local(cfg, prompt)
 
 

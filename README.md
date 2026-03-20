@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/platform-Raspberry%20Pi-c51a4a?style=for-the-badge&logo=raspberrypi&logoColor=white" alt="Raspberry Pi" />
   <img src="https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+" />
   <img src="https://img.shields.io/badge/voice-Silero%20VAD-ff6f00?style=for-the-badge" alt="Silero VAD" />
-  <img src="https://img.shields.io/badge/TTS-XTTS--v2-00c853?style=for-the-badge" alt="XTTS-v2" />
+
 </p>
 
 ---
@@ -30,9 +30,7 @@ The Pi is a **thin client** — it captures your voice and plays back audio. All
      ↓
   🟠 [Pi] Mic → Silero VAD (neural speech detection)
      ↓
-  🟣 [Cloud] Speech-to-Text → AI Chat → Text-to-Speech
-     ↓
-  🔵 [Pi] Speaker plays response
+  🧠 [Pi / Cloud] AI Chat (local Qwen or gateway)
      ↓
   🪷 Mandala face animates throughout
 ```
@@ -44,7 +42,6 @@ The Pi is a **thin client** — it captures your voice and plays back audio. All
 | | Feature | Details |
 |---|---------|---------|
 | 🗣️ | **Multilingual** | 10+ Indian languages, auto-detects and responds in your language |
-| 🎭 | **Voice cloning** | Custom TTS voice — sounds like whoever you want (XTTS-v2) |
 | 🧠 | **Neural VAD** | Silero voice activity detection (~2MB), no false triggers |
 | 📡 | **Thin client** | No API keys on device, no GPU needed on Pi |
 | 🪷 | **Mandala face** | Living animated display reacts to conversation state |
@@ -116,7 +113,7 @@ pi/
 | Service | Description |
 |---------|-------------|
 | 🧠 `ai-runtime` | Local API server (port 8000), serves face UI, exposes voice state |
-| 🎤 `vritti-voice` | Voice pipeline — mic → VAD → STT → chat → TTS → speaker |
+| 🎤 `vritti-voice` | Voice pipeline — mic → VAD → local chat |
 | 🪷 `vritti-kiosk` | Fullscreen Chromium kiosk showing mandala face |
 | 📡 `device-agent` | Heartbeat to gateway every 60s |
 
@@ -162,9 +159,7 @@ Runtime config: `/opt/ai-runtime/.env`
 | Layer | Technology |
 |-------|-----------|
 | 🎤 Voice detection | Silero VAD (PyTorch, ~2MB) |
-| 📝 Speech-to-text | Sarvam AI (Indian language STT) |
-| 💬 Chat AI | Sarvam AI / OpenRouter |
-| 🔊 Text-to-speech | XTTS-v2 (self-hosted, voice cloning) |
+| 💬 Chat AI | Sarvam AI / OpenRouter (gateway) or local Qwen |
 | 🧠 Local model | Qwen 3.5 (0.8B / 2B via Ollama) |
 | 🖥️ Pi server | FastAPI + Uvicorn |
 | 🪷 Face display | HTML5 Canvas mandala animation |
