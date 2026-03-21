@@ -1,10 +1,14 @@
-"""Voice pipeline: mic → VAD → local chat."""
+"""Voice pipeline — mic → VAD → gateway → speaker."""
 from __future__ import annotations
 
+import base64
 import io
 import json
 import logging
 import os
+import secrets
+import shutil
+import subprocess
 import time
 import urllib.request
 import wave
@@ -20,28 +24,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger("voice")
 
-# Local runtime
-LOCAL_API = os.getenv("API_BASE", "http://127.0.0.1:8000")
-
 # Audio settings
 RATE = 16000
 CHANNELS = 1
-CHUNK_DURATION = 0.03  # 30ms chunks
+CHUNK_DURATION = 0.03
 CHUNK_SAMPLES = int(RATE * CHUNK_DURATION)
 
 # Silero VAD settings
 VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "0.5"))
 SPEECH_START_CHUNKS = 3
-SILENCE_END_SECONDS = 1.2
+SILENCE_END_SECONDS = float(os.getenv("SILENCE_END_SECONDS", "0.6"))
 MIN_RECORDING_SECONDS = 0.5
 
+# Gateway config
+GATEWAY_BASE = os.getenv("GATEWAY_URL", "http://127.0.0.1:9000/v1/chat").strip().replace("/v1/chat", "")
+GATEWAY_TOKEN = os.getenv("GATEWAY_DEVICE_TOKEN", "").strip()
+DEVICE_ID = os.getenv("DEVICE_ID", "").strip()
 
-# ── Face UI state control ──
+
+# ── Face UI state ──
 STATE_FILE = Path("/tmp/vritti-state")
 
 
 def set_face_state(state: str):
-    """Update mandala face state."""
     STATE_FILE.write_text(state)
     logger.info(f"state → {state}")
 
@@ -49,7 +54,6 @@ def set_face_state(state: str):
 # ── Silero VAD ──
 
 def load_vad_model():
-    """Load Silero VAD model."""
     logger.info("loading Silero VAD model...")
     model, utils = torch.hub.load(
         repo_or_dir="snakers4/silero-vad",
@@ -61,7 +65,6 @@ def load_vad_model():
 
 
 def is_speech(model, audio_chunk: bytes) -> bool:
-    """Check if audio chunk contains speech."""
     samples = np.frombuffer(audio_chunk, dtype=np.int16).astype(np.float32) / 32768.0
     tensor = torch.from_numpy(samples)
     confidence = model(tensor, RATE).item()
@@ -69,7 +72,7 @@ def is_speech(model, audio_chunk: bytes) -> bool:
 
 
 def record_until_silence(vad_model) -> bytes | None:
-    """Record from mic until speech ends. Returns WAV bytes or None."""
+    """Record from mic until speech ends."""
     try:
         import pyaudio
     except ImportError:
@@ -127,7 +130,7 @@ def record_until_silence(vad_model) -> bytes | None:
 
     duration = len(frames) * CHUNK_DURATION
     if duration < MIN_RECORDING_SECONDS:
-        logger.info(f"too short ({duration:.1f}s), ignoring")
+        logger.info(f"too short — {duration:.1f}s, ignoring")
         return None
 
     logger.info(f"recorded {duration:.1f}s of audio")
@@ -141,22 +144,128 @@ def record_until_silence(vad_model) -> bytes | None:
     return buf.getvalue()
 
 
+# ── Audio compression ──
+
+def _compress_audio(wav_bytes: bytes) -> tuple[bytes, str]:
+    """Compress WAV to OGG/Opus via ffmpeg."""
+    if not shutil.which("ffmpeg"):
+        return wav_bytes, "audio/wav"
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-i", "pipe:0", "-c:a", "libopus", "-b:a", "24k",
+             "-f", "ogg", "pipe:1"],
+            input=wav_bytes, capture_output=True, timeout=5,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            logger.info(f"compressed {len(wav_bytes)} → {len(proc.stdout)} bytes")
+            return proc.stdout, "audio/ogg"
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return wav_bytes, "audio/wav"
+
+
+# ── Audio playback ──
+
+def _play_audio(audio_bytes: bytes):
+    """Play MP3 audio via mpg123 — falls back to ffplay."""
+    player = shutil.which("mpg123") or shutil.which("ffplay")
+    if not player:
+        logger.error("no audio player found — install mpg123: sudo apt install mpg123")
+        return
+    try:
+        cmd = [player, "-q", "-"] if "mpg123" in player else [player, "-nodisp", "-autoexit", "-"]
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc.communicate(input=audio_bytes, timeout=15)
+    except Exception as exc:
+        logger.error(f"playback error: {exc}")
+
+
+# ── Gateway voice roundtrip ──
+
+def voice_roundtrip(wav_bytes: bytes):
+    """Send audio to gateway, parse NDJSON stream, play audio."""
+    audio_bytes, content_type = _compress_audio(wav_bytes)
+
+    boundary = secrets.token_hex(16)
+    ext = "ogg" if "ogg" in content_type else "wav"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="audio.{ext}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    ).encode() + audio_bytes + f"\r\n--{boundary}--\r\n".encode()
+
+    req = urllib.request.Request(
+        f"{GATEWAY_BASE}/v1/voice",
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Authorization": f"Bearer {GATEWAY_TOKEN}",
+            "x-device-id": DEVICE_ID,
+        },
+    )
+
+    set_face_state("thinking")
+    t0 = time.time()
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            for raw_line in resp:
+                line = raw_line.decode("utf-8").strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                msg_type = msg.get("type", "")
+
+                if msg_type == "stt":
+                    logger.info(f"transcript: {msg.get('text', '')}")
+
+                elif msg_type == "audio":
+                    set_face_state("speaking")
+                    audio = base64.b64decode(msg["data"])
+                    _play_audio(audio)
+
+                elif msg_type == "done":
+                    elapsed = time.time() - t0
+                    logger.info(f"done in {elapsed:.1f}s: {msg.get('text', '')[:80]}")
+
+                elif msg_type == "error":
+                    logger.error(f"gateway error: {msg.get('detail', '')}")
+
+    except Exception as exc:
+        logger.error(f"voice roundtrip failed: {exc}")
+
+    set_face_state("idle")
+
+
+# ── Main loop ──
+
 def pipeline_loop():
-    """Main voice pipeline loop."""
     logger.info("voice pipeline started")
-    logger.info(f"VAD threshold: {VAD_THRESHOLD}")
+    logger.info(f"VAD threshold: {VAD_THRESHOLD}, silence: {SILENCE_END_SECONDS}s")
+    logger.info(f"gateway: {GATEWAY_BASE}")
+
+    # Check for audio player
+    if not (shutil.which("mpg123") or shutil.which("ffplay")):
+        logger.warning("no audio player found — install mpg123: sudo apt install mpg123")
 
     vad_model = load_vad_model()
 
-    # Wait for local runtime
-    for _ in range(30):
-        try:
-            urllib.request.urlopen(f"{LOCAL_API}/health", timeout=3)
-            break
-        except Exception:
-            time.sleep(1)
-    else:
-        logger.warning("local runtime not reachable, starting anyway")
+    # Wait for gateway if configured
+    if GATEWAY_TOKEN:
+        for _ in range(10):
+            try:
+                urllib.request.urlopen(f"{GATEWAY_BASE}/health", timeout=3)
+                logger.info("gateway reachable")
+                break
+            except Exception:
+                time.sleep(1)
+        else:
+            logger.warning("gateway not reachable, starting anyway")
 
     set_face_state("idle")
 
@@ -166,8 +275,11 @@ def pipeline_loop():
             if not audio:
                 continue
 
-            logger.info("audio captured, ready for processing")
-            set_face_state("idle")
+            if GATEWAY_TOKEN:
+                voice_roundtrip(audio)
+            else:
+                logger.info("no gateway token configured, audio captured but not sent")
+                set_face_state("idle")
 
         except KeyboardInterrupt:
             logger.info("pipeline stopped")
