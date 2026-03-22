@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hmac
 import os
+import secrets
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import Response
+from fastapi import FastAPI, Header, HTTPException, Request, UploadFile, File
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -65,6 +66,46 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
         if not token or not hmac.compare_digest(token, CHAT_TOKEN):
             raise HTTPException(status_code=401, detail="invalid or missing token")
     return generate(cfg, req.prompt.strip())
+
+
+@app.post("/v1/voice-proxy")
+async def voice_proxy(file: UploadFile = File(...)):
+    """Proxy audio to gateway /v1/voice and stream NDJSON back."""
+    if not cfg.gateway_base or not cfg.gateway_device_token:
+        raise HTTPException(status_code=503, detail="gateway not configured")
+
+    audio_bytes = await file.read()
+    boundary = secrets.token_hex(16)
+    filename = file.filename or "audio.webm"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: {file.content_type or 'audio/webm'}\r\n\r\n"
+    ).encode("utf-8") + audio_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    url = f"{cfg.gateway_base}/v1/voice"
+    req = urllib.request.Request(
+        url, data=body,
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Authorization": f"Bearer {cfg.gateway_device_token}",
+            "x-device-id": cfg.device_id or "browser-test",
+            "User-Agent": "Vritti-Pi/1.0",
+        },
+        method="POST",
+    )
+
+    import io as _io
+    def stream():
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                for line in resp:
+                    yield line
+        except Exception as e:
+            import json
+            yield json.dumps({"type": "error", "detail": str(e)}).encode() + b"\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
 
 
 # Face UI static files
