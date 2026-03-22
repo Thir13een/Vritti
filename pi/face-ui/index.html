@@ -18,11 +18,14 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;will-change:transform}
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="bars" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
 <div id="healthDot"></div>
 
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const barCanvas = document.getElementById('bars');
+const barCtx = barCanvas.getContext('2d');
 const healthDot = document.getElementById('healthDot');
 const TAU = Math.PI * 2;
 
@@ -49,6 +52,9 @@ function resize() {
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  barCanvas.width = W * dpr; barCanvas.height = H * dpr;
+  barCanvas.style.width = W + 'px'; barCanvas.style.height = H + 'px';
+  barCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   cx = W / 2; cy = H / 2;
   s = Math.max(0.4, Math.min(2.5, Math.min(W, H) / 620));
 }
@@ -177,13 +183,14 @@ function setAmplitude(v) { ampTarget = Math.max(0, Math.min(1, v)); }
 
 window.vritti = { setState, getState: () => state, setAmplitude };
 
+
 function blend(dt) {
   if (transBlend < 1) {
     transBlend = Math.min(1, transBlend + dt / transDuration);
-    const b = ease(transBlend);
-    for (const k in tgt) {
-      if (typeof tgt[k] === 'number') cur[k] = lerp(prev[k], tgt[k], b);
-    }
+  }
+  const b = ease(Math.min(1, transBlend));
+  for (const k in tgt) {
+    if (typeof tgt[k] === 'number') cur[k] = lerp(prev[k], tgt[k], b);
   }
 }
 
@@ -599,6 +606,13 @@ function frame(timestamp) {
 
   blend(dt);
 
+  // Simulate amplitude when model is speaking (pulsing pattern)
+  if (state === 'speaking' && !micActive) {
+    ampTarget = 0.3 + 0.25 * Math.sin(t * 7.5) * Math.sin(t * 3.2)
+              + 0.1 * Math.sin(t * 11.3 + 0.7);
+    ampTarget = Math.max(0, ampTarget);
+  }
+
   // Smooth amplitude toward target
   amp += (ampTarget - amp) * Math.min(1, dt * 12);
 
@@ -619,6 +633,11 @@ function frame(timestamp) {
       cur.ring2Alpha += a * 0.1;
       cur.yantraAlpha += a * 0.1;
     }
+
+    // Petal Unfurl — petals brighten and rotate with voice
+    cur.petalAlpha += a * 0.4;
+    cur.petalRot += a * 0.08;
+    cur.connectAlpha += a * 0.2;
   }
 
   const breathe = 1
@@ -677,72 +696,72 @@ function frame(timestamp) {
 }
 requestAnimationFrame(frame);
 
-// Mic test mode — click anywhere to start
-let testMode = false;
+// Mic activation — click anywhere to start/stop
+let micActive = false;
+let micAnalyser = null;
+let waveform = null;
+let barLoopRunning = false;
+
 canvas.style.cursor = 'pointer';
 canvas.addEventListener('click', async () => {
-  if (testMode) return;
-  testMode = true;
+  // Toggle off
+  if (micActive) {
+    micActive = false;
+    setState('idle');
+    setAmplitude(0);
+    canvas.style.cursor = 'pointer';
+    return;
+  }
+
+  // First time — set up audio
+  if (!micAnalyser) {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioCtx = new AudioContext();
+    const src = audioCtx.createMediaStreamSource(stream);
+    const gain = audioCtx.createGain();
+    gain.gain.value = 4.0;
+    micAnalyser = audioCtx.createAnalyser();
+    micAnalyser.fftSize = 2048;
+    micAnalyser.smoothingTimeConstant = 0.3;
+    src.connect(gain);
+    gain.connect(micAnalyser);
+    waveform = new Float32Array(micAnalyser.fftSize);
+    setInterval(() => { if (audioCtx.state === 'suspended') audioCtx.resume(); }, 1000);
+  }
+
+  micActive = true;
+  setState('listening');
   canvas.style.cursor = 'none';
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const audioCtx = new AudioContext();
-  const src = audioCtx.createMediaStreamSource(stream);
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 512;
-  analyser.smoothingTimeConstant = 0.4;
-  src.connect(analyser);
-  const buf = new Uint8Array(analyser.frequencyBinCount);
+  // Start mic reading loop on the overlay canvas (only once)
+  if (!barLoopRunning) {
+    barLoopRunning = true;
+    let smoothRms = 0;
 
-  let silenceTimer = 0;
-  let speaking = false;
-  const SILENCE_THRESHOLD = 0.08;
-  const SPEECH_THRESHOLD = 0.12;
-
-  function poll() {
-    analyser.getByteFrequencyData(buf);
-    let sum = 0;
-    for (let i = 0; i < buf.length; i++) sum += buf[i];
-    const rms = sum / (buf.length * 255);
-
-    setAmplitude(rms * 3);
-
-    if (state === 'idle' && rms > SPEECH_THRESHOLD) {
-      setState('listening');
-      speaking = true;
-      silenceTimer = 0;
-    } else if (state === 'listening') {
-      if (rms < SILENCE_THRESHOLD) {
-        silenceTimer += 1 / 60;
-        if (silenceTimer > 0.8) {
-          speaking = false;
-          setState('thinking');
-          setAmplitude(0);
-          setTimeout(() => {
-            setState('speaking');
-            // Simulate speaking with pulsing amplitude
-            let sp = 0;
-            const spk = setInterval(() => {
-              sp += 0.05;
-              const fakeAmp = 0.3 + 0.3 * Math.sin(sp * 8) * Math.sin(sp * 3);
-              setAmplitude(Math.max(0, fakeAmp));
-              if (sp > 3) {
-                clearInterval(spk);
-                setAmplitude(0);
-                setState('idle');
-              }
-            }, 33);
-          }, 1500);
-        }
-      } else {
-        silenceTimer = 0;
+    function micLoop() {
+      if (micActive && micAnalyser && waveform) {
+        micAnalyser.getFloatTimeDomainData(waveform);
+        let total = 0;
+        for (let i = 0; i < waveform.length; i++) total += waveform[i] * waveform[i];
+        const rms = Math.min(1, Math.sqrt(total / waveform.length) * 5);
+        smoothRms += (rms - smoothRms) * 0.3;
+        setAmplitude(smoothRms);
       }
+      requestAnimationFrame(micLoop);
     }
-
-    requestAnimationFrame(poll);
+    micLoop();
   }
-  poll();
-}, { once: true });
+
+  // Auto-stop after 1 minute
+  setTimeout(() => {
+    if (micActive) {
+      micActive = false;
+      setState('idle');
+      setAmplitude(0);
+      canvas.style.cursor = 'pointer';
+    }
+  }, 60000);
+});
 
 // Health check
 async function checkHealth() {
@@ -756,8 +775,9 @@ async function checkHealth() {
 checkHealth();
 setInterval(checkHealth, 30000);
 
-// Poll state from voice pipeline
+// Poll state from voice pipeline — skip when mic is active locally
 async function pollState() {
+  if (micActive) return;
   try {
     const res = await fetch('/v1/state', { signal: AbortSignal.timeout(2000) });
     if (!res.ok) return;
