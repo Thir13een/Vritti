@@ -40,6 +40,7 @@ MIN_RECORDING_SECONDS = 0.5
 GATEWAY_BASE = os.getenv("GATEWAY_URL", "http://127.0.0.1:9000/v1/chat").strip().replace("/v1/chat", "")
 GATEWAY_TOKEN = os.getenv("GATEWAY_DEVICE_TOKEN", "").strip()
 DEVICE_ID = os.getenv("DEVICE_ID", "").strip()
+VOICE_MODE = os.getenv("VOICE_MODE", "fast").strip()
 
 
 # ── Face UI state ──
@@ -202,6 +203,7 @@ def voice_roundtrip(wav_bytes: bytes):
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Authorization": f"Bearer {GATEWAY_TOKEN}",
             "x-device-id": DEVICE_ID,
+            "x-voice-mode": VOICE_MODE,
         },
     )
 

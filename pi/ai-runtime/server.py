@@ -69,7 +69,10 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
 
 
 @app.post("/v1/voice-proxy")
-async def voice_proxy(file: UploadFile = File(...)):
+async def voice_proxy(
+    file: UploadFile = File(...),
+    x_voice_mode: str | None = Header(default=None),
+):
     """Proxy audio to gateway /v1/voice and stream NDJSON back."""
     if not cfg.gateway_base or not cfg.gateway_device_token:
         raise HTTPException(status_code=503, detail="gateway not configured")
@@ -90,6 +93,7 @@ async def voice_proxy(file: UploadFile = File(...)):
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Authorization": f"Bearer {cfg.gateway_device_token}",
             "x-device-id": cfg.device_id or "browser-test",
+            "x-voice-mode": x_voice_mode or "fast",
             "User-Agent": "Vritti-Pi/1.0",
         },
         method="POST",
