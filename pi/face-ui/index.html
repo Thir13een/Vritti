@@ -9,6 +9,12 @@
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;cursor:none;
   -webkit-user-select:none;user-select:none}
 canvas{position:fixed;top:0;left:0;width:100%;height:100%;will-change:transform}
+#modeBtn{position:fixed;bottom:18px;left:18px;z-index:20;
+  font:12px/1 monospace;color:rgba(255,255,255,0.45);cursor:pointer;
+  padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:14px;
+  background:rgba(255,255,255,0.05);transition:all 0.3s;
+  -webkit-user-select:none;user-select:none}
+#modeBtn:active{background:rgba(255,255,255,0.15)}
 #healthDot{position:fixed;top:16px;right:16px;width:8px;height:8px;border-radius:50%;
   background:#555;z-index:20;transition:background 0.5s,box-shadow 0.5s}
 #healthDot.green{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,0.4)}
@@ -19,6 +25,7 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;will-change:transform}
 <body>
 <canvas id="c"></canvas>
 <canvas id="bars" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
+<div id="modeBtn"></div>
 <div id="healthDot"></div>
 
 <script>
@@ -786,6 +793,39 @@ async function pollState() {
   } catch {}
 }
 setInterval(pollState, 200);
+
+// Mode selector
+const modeBtn = document.getElementById('modeBtn');
+const modes = ['fast', 'balanced', 'deep'];
+const modeLabels = { fast: '⚡ Fast', balanced: '⚖ Balanced', deep: '🧠 Deep' };
+let currentMode = 'fast';
+
+async function loadMode() {
+  try {
+    const res = await fetch('/v1/mode', { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      currentMode = data.mode || 'fast';
+    }
+  } catch {}
+  modeBtn.textContent = modeLabels[currentMode] || currentMode;
+}
+
+modeBtn.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const idx = (modes.indexOf(currentMode) + 1) % modes.length;
+  currentMode = modes[idx];
+  modeBtn.textContent = modeLabels[currentMode];
+  try {
+    await fetch('/v1/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: currentMode }),
+    });
+  } catch {}
+});
+
+loadMode();
 </script>
 </body>
 </html>

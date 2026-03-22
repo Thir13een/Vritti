@@ -35,6 +35,10 @@ class ChatRequest(BaseModel):
     prompt: str = Field(..., max_length=50_000)
 
 
+VALID_MODES = ("fast", "balanced", "deep")
+MODE_FILE = Path("/tmp/vritti-mode")
+
+
 @app.get("/v1/state")
 def get_state() -> dict:
     """Current face state from voice pipeline."""
@@ -42,6 +46,30 @@ def get_state() -> dict:
         return {"state": Path("/tmp/vritti-state").read_text().strip()}
     except FileNotFoundError:
         return {"state": "idle"}
+
+
+@app.get("/v1/mode")
+def get_mode() -> dict:
+    try:
+        mode = MODE_FILE.read_text().strip()
+        if mode in VALID_MODES:
+            return {"mode": mode}
+    except FileNotFoundError:
+        pass
+    return {"mode": "fast"}
+
+
+class ModeRequest(BaseModel):
+    mode: str
+
+
+@app.post("/v1/mode")
+def set_mode(req: ModeRequest) -> dict:
+    mode = req.mode.strip().lower()
+    if mode not in VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"invalid mode, use: {', '.join(VALID_MODES)}")
+    MODE_FILE.write_text(mode)
+    return {"mode": mode}
 
 
 @app.get("/health")
