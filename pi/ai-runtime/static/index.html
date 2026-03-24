@@ -362,26 +362,49 @@
     const sendBtn = document.getElementById('send');
     const statusEl = document.getElementById('status');
     const statusDot = document.getElementById('statusDot');
-    const CONVERSATION_KEY = 'vritti-conversation-id';
+    const CONVERSATION_KEY = 'vritti-conversation-state';
+    const CONVERSATION_IDLE_MS = 30 * 60 * 1000;
     let welcomeShown = true;
 
     function createConversationId() {
       return 'browser-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
     }
 
-    function getConversationId() {
+    function readConversationState() {
       try {
-        const existing = localStorage.getItem(CONVERSATION_KEY);
-        if (existing) return existing;
-        const created = createConversationId();
-        localStorage.setItem(CONVERSATION_KEY, created);
-        return created;
+        const raw = localStorage.getItem(CONVERSATION_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (!parsed.id || typeof parsed.id !== 'string') return null;
+        return parsed;
       } catch {
-        return createConversationId();
+        return null;
       }
     }
 
-    const conversationId = getConversationId();
+    function persistConversationState(state) {
+      try { localStorage.setItem(CONVERSATION_KEY, JSON.stringify(state)); } catch {}
+      return state;
+    }
+
+    function ensureConversationState(forceNew = false) {
+      const now = Date.now();
+      const existing = readConversationState();
+      if (!forceNew && existing && now - Number(existing.lastActiveAt || 0) < CONVERSATION_IDLE_MS) {
+        existing.lastActiveAt = now;
+        return persistConversationState(existing);
+      }
+      return persistConversationState({ id: createConversationId(), lastActiveAt: now });
+    }
+
+    function touchConversation() {
+      return ensureConversationState(false).id;
+    }
+
+    function getConversationId() {
+      return touchConversation();
+    }
 
     function setStatus(s) { statusEl.textContent = s; }
 
@@ -433,6 +456,7 @@
     async function send() {
       const prompt = promptEl.value.trim();
       if (!prompt) return;
+      const conversationId = touchConversation();
       promptEl.value = '';
       promptEl.style.height = 'auto';
       addMessage('user', prompt);

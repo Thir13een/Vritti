@@ -498,7 +498,8 @@ const micWrap = document.getElementById('micWrap');
 const micLevelArc = document.getElementById('micLevelArc');
 const TAU = Math.PI * 2;
 const RING_LEN = 2 * Math.PI * 68;
-const CONVERSATION_KEY = 'vritti-conversation-id';
+const CONVERSATION_KEY = 'vritti-conversation-state';
+const CONVERSATION_IDLE_MS = 30 * 60 * 1000;
 
 const STATUS_COPY = {
   idle: {
@@ -599,19 +600,37 @@ function mix(a, b, n) { return [lerp(a[0], b[0], n), lerp(a[1], b[1], n), lerp(a
 function pal() { return LOTUS_PALETTES[state] || LOTUS_PALETTES.idle; }
 function dayPal() { return DAYPARTS[dayPart] || DAYPARTS.afternoon; }
 function createConversationId() { return 'kiosk-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36); }
-function getConversationId() {
+function readConversationState() {
   try {
-    const existing = localStorage.getItem(CONVERSATION_KEY);
-    if (existing) return existing;
-    const created = createConversationId();
-    localStorage.setItem(CONVERSATION_KEY, created);
-    return created;
+    const raw = localStorage.getItem(CONVERSATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!parsed.id || typeof parsed.id !== 'string') return null;
+    return parsed;
   } catch {
-    return createConversationId();
+    return null;
   }
 }
 
-const conversationId = getConversationId();
+function persistConversationState(state) {
+  try { localStorage.setItem(CONVERSATION_KEY, JSON.stringify(state)); } catch {}
+  return state;
+}
+
+function ensureConversationState(forceNew) {
+  const now = Date.now();
+  const existing = readConversationState();
+  if (!forceNew && existing && now - Number(existing.lastActiveAt || 0) < CONVERSATION_IDLE_MS) {
+    existing.lastActiveAt = now;
+    return persistConversationState(existing);
+  }
+  return persistConversationState({ id: createConversationId(), lastActiveAt: now });
+}
+
+function touchConversation() {
+  return ensureConversationState(false).id;
+}
 
 function getDayPartForHour(hour) {
   if (hour >= 5 && hour < 12) return 'morning';
@@ -1229,6 +1248,7 @@ function handleVoiceEvent(msg) {
 function connectVoiceSocket() {
   if (!voiceSocketSupported) return Promise.reject(new Error('disabled'));
   return new Promise(function (resolve, reject) {
+    const conversationId = touchConversation();
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/v1/voice/ws');
     let settled = false;
     ws.onopen = function () {
@@ -1267,6 +1287,7 @@ async function sendAudioToGateway(blob) {
   setState('thinking');
   setAmplitude(0);
   try {
+    const conversationId = touchConversation();
     const form = new FormData();
     form.append('file', blob, 'audio.webm');
     const resp = await fetch('/v1/voice-proxy', {
@@ -1369,6 +1390,7 @@ async function toggleMic() {
   if (micStarting || (processing && !micActive)) return;
   await refreshMicAvailability();
   if (!micAvailable) return;
+  touchConversation();
   await ensureRuntimeConfig();
   if (micActive) {
     if (currentAudio) {
