@@ -20,6 +20,8 @@ ExecStart=/usr/bin/chromium-browser \
   --check-for-update-interval=31536000 \
   --no-first-run \
   --start-fullscreen \
+  --use-fake-ui-for-media-stream \
+  --enable-media-stream \
   --autoplay-policy=no-user-gesture-required \
   --use-gl=egl \
   http://127.0.0.1:8000/

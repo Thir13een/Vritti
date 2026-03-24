@@ -43,7 +43,6 @@ html, body {
     radial-gradient(circle at 80% 34%, var(--sky-c), transparent 28%),
     linear-gradient(180deg, #030404 0%, var(--bg-0) 18%, var(--bg-1) 58%, var(--bg-2) 100%);
   color: var(--cream);
-  cursor: none;
   user-select: none;
   touch-action: manipulation;
   overscroll-behavior: none;
@@ -188,6 +187,21 @@ canvas#c {
   font-family: "Baskerville", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
+#statusLine {
+  min-height: 1.35em;
+  margin-top: 12px;
+  font-size: clamp(0.8rem, 1.5vw, 0.95rem);
+  line-height: 1.35;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mist-soft);
+  font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
+}
+
+#statusLine:empty {
+  margin-top: 0;
+}
+
 #bottom {
   position: fixed;
   left: 50%;
@@ -275,6 +289,25 @@ canvas#c {
     0 0 24px rgba(213, 179, 119, 0.12),
     0 14px 28px rgba(0,0,0,0.28),
     inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+#micWrap.disabled .track {
+  stroke: rgba(185, 129, 123, 0.12);
+}
+
+#micWrap.disabled .level {
+  stroke: rgba(185, 129, 123, 0.42);
+  stroke-dashoffset: 256;
+}
+
+#micBtn:disabled {
+  cursor: default;
+  opacity: 0.62;
+  border-color: rgba(185, 129, 123, 0.34);
+  box-shadow:
+    0 8px 16px rgba(0,0,0,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    inset 0 -8px 14px rgba(0,0,0,0.18);
 }
 
 body[data-face="idle"] #stateWord { color: var(--cream); }
@@ -424,6 +457,7 @@ body[data-face="error"] #stateWord { color: #b9817b; }
 <div id="shell">
   <div id="centerCopy">
     <div id="stateWord">Still</div>
+    <div id="statusLine" aria-live="polite"></div>
   </div>
 
   <div id="bottom">
@@ -459,6 +493,7 @@ const ctx = canvas.getContext('2d');
 const modeBtn = document.getElementById('modeBtn');
 const modeLabel = document.getElementById('modeLabel');
 const stateWord = document.getElementById('stateWord');
+const statusLine = document.getElementById('statusLine');
 const micWrap = document.getElementById('micWrap');
 const micLevelArc = document.getElementById('micLevelArc');
 const TAU = Math.PI * 2;
@@ -644,6 +679,27 @@ let cur = Object.assign({}, prevParams);
 
 function updateModeChrome() {
   modeLabel.textContent = MODE_COPY[currentMode] || currentMode;
+}
+
+function setStatusMessage(message) {
+  micStatusMessage = message || '';
+  statusLine.textContent = micStatusMessage;
+}
+
+function applyMicAvailability() {
+  const blocked = !micAvailable;
+  micBtn.disabled = blocked;
+  micBtn.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+  micWrap.classList.toggle('disabled', blocked);
+  if (!blocked && !micStatusMessage) statusLine.textContent = '';
+}
+
+function setMicAvailability(available, message) {
+  micAvailable = available;
+  micIssueActive = !available;
+  setStatusMessage(message);
+  if (micIssueActive && state === 'error' && !processing && !micActive) setState('idle', true);
+  applyMicAvailability();
 }
 
 function updateStatusChrome() {
@@ -861,6 +917,14 @@ let micSource = null;
 let playbackAnalyser = null;
 let playbackWaveform = null;
 let playbackSource = null;
+let micStarting = false;
+let micAvailable = true;
+let micIssueActive = false;
+let micStatusMessage = '';
+let browserMicPermission = 'unknown';
+let browserHasAudioInput = null;
+let runtimeBackendReachable = true;
+let runtimeOffline = false;
 const SILENCE_THRESHOLD = 0.02;
 const SILENCE_TIMEOUT = 650;
 const MAX_RECORDING_MS = 12000;
@@ -891,6 +955,69 @@ async function loadRuntimeConfig() {
 function ensureRuntimeConfig() {
   if (!runtimeConfigPromise) runtimeConfigPromise = loadRuntimeConfig();
   return runtimeConfigPromise;
+}
+
+async function checkBrowserMicAccess() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    browserHasAudioInput = false;
+    browserMicPermission = 'unsupported';
+    return;
+  }
+  if (navigator.mediaDevices.enumerateDevices) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      browserHasAudioInput = devices.some(function (device) { return device.kind === 'audioinput'; });
+    } catch {}
+  }
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' });
+      browserMicPermission = result.state || 'unknown';
+      result.onchange = function () {
+        browserMicPermission = result.state || 'unknown';
+        syncMicAvailability();
+      };
+    } catch {}
+  }
+}
+
+async function loadRuntimeHealth() {
+  try {
+    const response = await fetch('/health', { signal: AbortSignal.timeout(2000) });
+    if (!response.ok) return;
+    const data = await response.json();
+    runtimeBackendReachable = data.backend === 'reachable';
+    runtimeOffline = !runtimeBackendReachable;
+    if (runtimeOffline && !micActive && !processing && !currentAudio) setState('error', true);
+    if (!runtimeOffline && state === 'error' && !micIssueActive && !micActive && !processing && !currentAudio) {
+      setState('idle', true);
+    }
+  } catch {
+    runtimeBackendReachable = false;
+    runtimeOffline = true;
+    if (!micActive && !processing && !currentAudio) setState('error', true);
+  }
+}
+
+function syncMicAvailability() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setMicAvailability(false, 'Microphone unsupported.');
+    return;
+  }
+  if (browserMicPermission === 'denied') {
+    setMicAvailability(false, 'Allow microphone in Chromium.');
+    return;
+  }
+  if (browserHasAudioInput === false) {
+    setMicAvailability(false, 'No browser microphone detected.');
+    return;
+  }
+  setMicAvailability(true, '');
+}
+
+async function refreshMicAvailability() {
+  await Promise.all([loadRuntimeHealth(), checkBrowserMicAccess()]);
+  syncMicAvailability();
 }
 
 function ensureAudioContext() {
@@ -938,10 +1065,11 @@ function setMicRingLevel(level) {
 }
 
 function updateMicBtn() {
-  if (micActive) micBtn.classList.add('active');
+  if (micActive || micStarting) micBtn.classList.add('active');
   else micBtn.classList.remove('active');
-  micWrap.classList.toggle('listening', micActive);
-  if (!micActive) setMicRingLevel(0);
+  micWrap.classList.toggle('listening', micActive || micStarting);
+  if (!micActive && micAvailable) setMicRingLevel(0);
+  applyMicAvailability();
 }
 
 function stopRecording() {
@@ -1223,7 +1351,9 @@ async function startStreamingVoice() {
 }
 
 async function toggleMic() {
-  if (processing && !micActive) return;
+  if (micStarting || (processing && !micActive)) return;
+  await refreshMicAvailability();
+  if (!micAvailable) return;
   await ensureRuntimeConfig();
   if (micActive) {
     if (currentAudio) {
@@ -1234,8 +1364,32 @@ async function toggleMic() {
     return;
   }
 
+  micStarting = true;
+  setState('listening');
+  updateMicBtn();
+
   if (!micStream) {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      browserMicPermission = 'granted';
+      browserHasAudioInput = true;
+      syncMicAvailability();
+    } catch (error) {
+      const name = String(error && error.name || '');
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        browserMicPermission = 'denied';
+        setMicAvailability(false, 'Allow microphone in Chromium.');
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        browserHasAudioInput = false;
+        setMicAvailability(false, 'No browser microphone detected.');
+      } else {
+        setMicAvailability(false, 'Microphone start failed.');
+      }
+      micStarting = false;
+      if (!micIssueActive) setState('idle');
+      updateMicBtn();
+      return;
+    }
     if (!audioCtx) audioCtx = new AudioContext({ sampleRate: PCM_SAMPLE_RATE });
     micSource = audioCtx.createMediaStreamSource(micStream);
     const gain = audioCtx.createGain();
@@ -1253,6 +1407,7 @@ async function toggleMic() {
 
   await startStreamingVoice();
   recordingStartedAt = performance.now();
+  micStarting = false;
   micActive = true;
   processing = streamingMode;
   setState('listening');
@@ -1291,17 +1446,23 @@ async function toggleMic() {
   }, MAX_RECORDING_MS);
 }
 micBtn.addEventListener('click', toggleMic);
+window.addEventListener('focus', refreshMicAvailability);
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) refreshMicAvailability();
+});
 
 async function pollState() {
-  if (micActive) return;
+  if (micActive || processing || currentAudio || micIssueActive || runtimeOffline) return;
   try {
     const r = await fetch('/v1/state', { signal: AbortSignal.timeout(2000) });
     if (!r.ok) return;
     const d = await r.json();
-    if (d.state && d.state !== state) setState(d.state);
+    if (!d.state || d.state === 'error') return;
+    if (d.state !== state) setState(d.state);
   } catch {}
 }
 setInterval(pollState, 500);
+setInterval(loadRuntimeHealth, 3000);
 
 async function loadMode() {
   try {
@@ -1329,6 +1490,7 @@ updateStatusChrome();
 updateModeChrome();
 loadMode();
 ensureRuntimeConfig();
+refreshMicAvailability();
 </script>
 </body>
 </html>
