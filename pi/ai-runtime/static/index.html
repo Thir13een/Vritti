@@ -31,7 +31,7 @@
       flex-direction: column;
     }
 
-    /* WhatsApp/Telegram chat background pattern (subtle) */
+    /* Subtle chat pattern */
     body::before {
       content: "";
       position: absolute;
@@ -42,7 +42,7 @@
       z-index: -1;
     }
 
-    /* ── Header ─────────────────────────────────────── */
+    /* Header */
     .header {
       padding: 0.75rem 1.25rem;
       background: rgba(18, 18, 26, 0.85);
@@ -92,7 +92,7 @@
       50% { transform: scale(1.1); opacity: 0.7; }
     }
 
-    /* ── Messages ───────────────────────────────────── */
+    /* Messages */
     .messages {
       flex: 1;
       overflow-y: auto;
@@ -179,7 +179,7 @@
       border-radius: 0.25rem 1.25rem 1.25rem 1.25rem;
     }
 
-    /* Chat Tails */
+    /* Bubble tails */
     .msg.user .bubble::after {
       content: '';
       position: absolute;
@@ -187,7 +187,7 @@
       right: -8px;
       width: 16px;
       height: 16px;
-      background: var(--saffron-light); /* Approximate right side of gradient */
+      background: var(--saffron-light);
       clip-path: polygon(0 0, 0 100%, 100% 0);
       border-radius: 0 4px 0 0;
     }
@@ -217,7 +217,7 @@
       letter-spacing: 0.05em;
     }
 
-    /* ── Typing indicator ───────────────────────────── */
+    /* Typing */
     .typing { align-self: flex-start; }
     .typing .bubble {
       background: var(--bg-card);
@@ -246,7 +246,7 @@
       40% { transform: scale(1); opacity: 1; }
     }
 
-    /* ── Input area ─────────────────────────────────── */
+    /* Input */
     .input-wrapper {
       background: rgba(18, 18, 26, 0.85);
       backdrop-filter: blur(12px);
@@ -405,7 +405,7 @@
       return p.innerHTML;
     }
 
-    // Auto-resize textarea
+    // Auto-resize
     promptEl.addEventListener('input', () => {
       promptEl.style.height = 'auto';
       promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + 'px';
@@ -455,13 +455,13 @@
     sendBtn.addEventListener('click', send);
     promptEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { 
-        // Mobile simple submit fix
+        // Mobile submit
         e.preventDefault(); 
         send(); 
       }
     });
 
-    // Health check — update status dot
+    // Health check
     async function checkHealth() {
       try {
         const res = await fetch('/health');

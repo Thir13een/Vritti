@@ -4,606 +4,812 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Vritti</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;cursor:none;
-  -webkit-user-select:none;user-select:none}
-canvas{position:fixed;top:0;left:0;width:100%;height:100%;will-change:transform}
-#modeBtn{position:fixed;bottom:18px;left:18px;z-index:20;
-  font:12px/1 monospace;color:rgba(255,255,255,0.45);cursor:pointer;
-  padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:14px;
-  background:rgba(255,255,255,0.05);transition:all 0.3s;
-  -webkit-user-select:none;user-select:none}
-#modeBtn:active{background:rgba(255,255,255,0.15)}
-#healthDot{position:fixed;top:16px;right:16px;width:8px;height:8px;border-radius:50%;
-  background:#555;z-index:20;transition:background 0.5s,box-shadow 0.5s}
-#healthDot.green{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,0.4)}
-#healthDot.yellow{background:#facc15;box-shadow:0 0 6px rgba(250,204,21,0.4)}
-#healthDot.red{background:#f87171;box-shadow:0 0 6px rgba(248,113,113,0.4)}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+button { font: inherit; border: 0; background: none; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg-0: #040506;
+  --bg-1: #0d1111;
+  --bg-2: #141612;
+  --cream: #f1e7d3;
+  --mist: rgba(241, 231, 211, 0.68);
+  --mist-soft: rgba(241, 231, 211, 0.46);
+  --glass-line: rgba(255, 248, 232, 0.12);
+  --gold: #d5b377;
+  --brass: #b8935e;
+  --jade: #2d5c52;
+  --sage: #7e9889;
+  --wine: #8e5d5b;
+  --ink: rgba(7, 9, 11, 0.7);
+  --sky-a: rgba(213, 179, 119, 0.1);
+  --sky-b: rgba(45, 92, 82, 0.08);
+  --sky-c: rgba(126, 152, 137, 0.06);
+  --aura-a: rgba(213, 179, 119, 0.08);
+  --aura-b: rgba(45, 92, 82, 0.06);
+  --ambient-top: rgba(255,255,255,0.04);
+  --ambient-gold: rgba(213, 179, 119, 0.08);
+  --ambient-line: rgba(255,255,255,0.02);
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 18%, var(--sky-a), transparent 24%),
+    radial-gradient(circle at 20% 62%, var(--sky-b), transparent 26%),
+    radial-gradient(circle at 80% 34%, var(--sky-c), transparent 28%),
+    linear-gradient(180deg, #030404 0%, var(--bg-0) 18%, var(--bg-1) 58%, var(--bg-2) 100%);
+  color: var(--cream);
+  cursor: none;
+  user-select: none;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  font-family: "Optima", "Candara", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 54%, var(--aura-a), transparent 20%),
+    radial-gradient(circle at 50% 54%, var(--aura-b), transparent 34%);
+  opacity: 1;
+  mix-blend-mode: screen;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.25'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+#ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 1;
+  background:
+    linear-gradient(180deg, var(--ambient-top), transparent 18%),
+    radial-gradient(circle at 50% 0%, var(--ambient-gold), transparent 34%),
+    radial-gradient(circle at 50% 52%, var(--aura-a), transparent 24%),
+    radial-gradient(circle at 50% 52%, var(--aura-b), transparent 42%),
+    linear-gradient(90deg, transparent 0%, var(--ambient-line) 50%, transparent 100%);
+  mix-blend-mode: screen;
+}
+
+canvas#c {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#shell {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.glass {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.03) 28%, rgba(15, 19, 19, 0.22) 100%),
+    linear-gradient(180deg, rgba(16, 18, 20, 0.58), rgba(8, 10, 11, 0.4));
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.1),
+    inset 0 -1px 0 rgba(255,255,255,0.03),
+    0 18px 48px rgba(0,0,0,0.24);
+}
+
+#modeBtn .kicker {
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(241, 231, 211, 0.42);
+  font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-weight: 600;
+}
+
+#modeBtn {
+  width: auto;
+  min-width: 108px;
+  min-height: 50px;
+  padding: 11px 18px 12px;
+  border-radius: 999px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03) 34%, rgba(8, 10, 11, 0.1) 100%),
+    linear-gradient(180deg, rgba(22, 24, 27, 0.84), rgba(11, 13, 15, 0.9));
+  border: 1px solid rgba(242, 231, 208, 0.13);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.14),
+    0 10px 24px rgba(0,0,0,0.22),
+    0 0 0 1px rgba(255,255,255,0.02);
+  backdrop-filter: blur(8px) saturate(1.02);
+  -webkit-backdrop-filter: blur(8px) saturate(1.02);
+}
+
+#modeBtn {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03) 34%, rgba(8, 10, 11, 0.08) 100%),
+    linear-gradient(180deg, rgba(28, 24, 19, 0.86), rgba(15, 13, 11, 0.92));
+  border-color: rgba(213, 179, 119, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.16),
+    0 10px 24px rgba(0,0,0,0.22),
+    0 8px 18px rgba(213, 179, 119, 0.08);
+}
+
+#modeLabel {
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+  font-family: "Avenir Next Condensed", "Segoe UI Variable", "Segoe UI", sans-serif;
+}
+
+#centerCopy {
+  position: fixed;
+  left: 50%;
+  top: clamp(70px, 11vh, 108px);
+  transform: translateX(-50%);
+  width: min(76vw, 880px);
+  text-align: center;
+  pointer-events: none;
+}
+
+#stateWord {
+  font-size: clamp(4rem, 10.5vw, 7.2rem);
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-shadow: 0 12px 42px rgba(0, 0, 0, 0.32);
+  font-family: "Baskerville", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+}
+
+#bottom {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(28px, 5vh, 48px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#bottomRail {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: clamp(12px, 1.6vw, 18px);
+}
+
+#modeBtn,
+#micWrap {
+  pointer-events: auto;
+}
+
+#micWrap {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: grid;
+  place-items: center;
+}
+
+#micWrap .level-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+#micWrap .track {
+  fill: none;
+  stroke: rgba(255,255,255,0.06);
+  stroke-width: 2;
+}
+
+#micWrap .level {
+  fill: none;
+  stroke: url(#ringGrad);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 427;
+  stroke-dashoffset: 427;
+  transition: stroke-dashoffset 0.1s ease;
+}
+
+#micBtn {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255,255,255,0.16), transparent 32%),
+    radial-gradient(circle at 50% 100%, rgba(213, 179, 119, 0.12), transparent 44%),
+    linear-gradient(180deg, rgba(27, 30, 31, 0.98), rgba(11, 13, 14, 1));
+  border: 1px solid rgba(213, 179, 119, 0.42);
+  box-shadow:
+    0 12px 24px rgba(0,0,0,0.26),
+    0 8px 20px rgba(213, 179, 119, 0.08),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -10px 16px rgba(0,0,0,0.22);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+#micBtn svg {
+  width: 26px;
+  height: 26px;
+  fill: rgba(241, 231, 211, 0.92);
+}
+
+#micBtn:active { transform: scale(0.97); }
+#micBtn.active {
+  border-color: rgba(213, 179, 119, 0.8);
+  box-shadow:
+    0 0 0 1px rgba(213, 179, 119, 0.22),
+    0 0 24px rgba(213, 179, 119, 0.12),
+    0 14px 28px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+body[data-face="idle"] #stateWord { color: var(--cream); }
+body[data-face="listening"] #stateWord { color: #d8bc88; }
+body[data-face="thinking"] #stateWord { color: #a7baae; }
+body[data-face="speaking"] #stateWord { color: #e0b77d; }
+body[data-face="error"] #stateWord { color: #b9817b; }
+
+@media (hover: hover) and (pointer: fine) {
+  #micBtn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(213, 179, 119, 0.54);
+  }
+}
+
+@media (max-width: 980px) {
+  #centerCopy {
+    width: min(88vw, 740px);
+  }
+}
+
+@media (max-width: 640px) {
+  #centerCopy {
+    top: max(66px, env(safe-area-inset-top));
+    width: calc(100vw - 28px);
+  }
+
+  #stateWord {
+    font-size: clamp(3.6rem, 18vw, 5.8rem);
+  }
+
+  #bottom {
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  #bottomRail {
+    gap: 10px;
+  }
+
+  #modeBtn {
+    width: auto;
+    min-width: 88px;
+    min-height: 44px;
+    padding: 10px 13px;
+    border-radius: 999px;
+  }
+
+  #micWrap {
+    width: 94px;
+    height: 94px;
+  }
+
+  #micWrap .level-ring {
+    inset: 2px;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+  }
+
+  #micBtn {
+    width: 66px;
+    height: 66px;
+  }
+}
+
+@media (max-height: 760px) {
+  #centerCopy {
+    top: 70px;
+  }
+
+  #micWrap {
+    width: 96px;
+    height: 96px;
+  }
+
+  #micBtn {
+    width: 66px;
+    height: 66px;
+  }
+
+  #bottom {
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 520px) {
+  #modeLabel {
+    font-size: 0.78rem;
+  }
+
+  #modeBtn .kicker {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+}
+
+@media (max-width: 430px) {
+  #centerCopy {
+    top: max(58px, env(safe-area-inset-top));
+  }
+
+  #stateWord {
+    font-size: clamp(3.2rem, 16vw, 4.8rem);
+  }
+
+  #bottomRail {
+    grid-template-columns: auto auto;
+    grid-template-areas: "mic mode";
+    justify-items: center;
+    column-gap: 10px;
+  }
+
+  #modeBtn {
+    grid-area: mode;
+  }
+
+  #micWrap {
+    grid-area: mic;
+    width: 92px;
+    height: 92px;
+  }
+
+  #micBtn {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+@media (max-height: 620px) {
+  #centerCopy {
+    top: 56px;
+  }
+
+  #bottom {
+    bottom: 10px;
+  }
+
+  #bottomRail {
+    gap: 10px;
+  }
+}
 </style>
 </head>
-<body>
+<body data-face="idle">
+<div id="ambient" aria-hidden="true"></div>
 <canvas id="c"></canvas>
-<canvas id="bars" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
-<div id="modeBtn"></div>
-<div id="healthDot"></div>
+
+<div id="shell">
+  <div id="centerCopy">
+    <div id="stateWord">Still</div>
+  </div>
+
+  <div id="bottom">
+    <div id="bottomRail">
+      <div id="micWrap">
+        <svg class="level-ring" viewBox="0 0 158 158" aria-hidden="true">
+          <defs>
+              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8e5d5b"></stop>
+              <stop offset="48%" stop-color="#d5b377"></stop>
+              <stop offset="100%" stop-color="#2d5c52"></stop>
+            </linearGradient>
+          </defs>
+          <circle class="track" cx="79" cy="79" r="68"></circle>
+          <circle class="level" id="micLevelArc" cx="79" cy="79" r="68"></circle>
+        </svg>
+        <button type="button" id="micBtn" aria-label="Microphone toggle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"></path></svg>
+        </button>
+      </div>
+
+      <button type="button" id="modeBtn" class="glass" aria-label="Switch response mode">
+        <div class="kicker">Mode</div>
+        <div id="modeLabel">Fast</div>
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-const barCanvas = document.getElementById('bars');
-const barCtx = barCanvas.getContext('2d');
-const healthDot = document.getElementById('healthDot');
+const modeBtn = document.getElementById('modeBtn');
+const modeLabel = document.getElementById('modeLabel');
+const stateWord = document.getElementById('stateWord');
+const micWrap = document.getElementById('micWrap');
+const micLevelArc = document.getElementById('micLevelArc');
 const TAU = Math.PI * 2;
+const RING_LEN = 2 * Math.PI * 68;
 
-const COL = {
-  saffron: [232, 121, 36],
-  teal:    [0, 77, 64],
-  tealLt:  [0, 105, 85],
-  gold:    [255, 215, 64],
-  white:   [236, 239, 241],
+const STATUS_COPY = {
+  idle: {
+    word: 'Still',
+    mic: 'Tap to speak.',
+  },
+  listening: {
+    word: 'Attentive',
+    mic: 'Listening.',
+  },
+  thinking: {
+    word: 'Composing',
+    mic: 'Thinking.',
+  },
+  speaking: {
+    word: 'Expressing',
+    mic: 'Tap to stop.',
+  },
+  error: {
+    word: 'Offline',
+    mic: 'Retry.',
+  },
 };
 
-let W, H, cx, cy, s;
-let t = 0, lastTime = 0;
-let state = 'idle', transBlend = 1, transDuration = 1;
-
-// Transition durations (s)
-const TRANS_DURATIONS = {
-  idle: 0.8, listening: 0.4, thinking: 0.4, speaking: 0.4, error: 0.3
+const MODE_COPY = {
+  fast: 'Fast',
+  deep: 'Deep',
 };
+
+const DAYPARTS = {
+  morning: {
+    skyA: 'rgba(229, 188, 126, 0.18)',
+    skyB: 'rgba(155, 174, 141, 0.09)',
+    skyC: 'rgba(243, 218, 181, 0.05)',
+    auraA: 'rgba(236, 192, 126, 0.12)',
+    auraB: 'rgba(129, 160, 128, 0.08)',
+    ambientTop: 'rgba(255,244,224,0.06)',
+    ambientGold: 'rgba(236, 192, 126, 0.12)',
+    ambientLine: 'rgba(255,248,236,0.022)',
+    glowA: [232, 188, 120],
+    glowB: [152, 176, 138],
+  },
+  afternoon: {
+    skyA: 'rgba(212, 177, 120, 0.12)',
+    skyB: 'rgba(76, 110, 100, 0.08)',
+    skyC: 'rgba(156, 176, 170, 0.05)',
+    auraA: 'rgba(212, 177, 120, 0.1)',
+    auraB: 'rgba(76, 110, 100, 0.07)',
+    ambientTop: 'rgba(255,255,255,0.04)',
+    ambientGold: 'rgba(212, 177, 120, 0.09)',
+    ambientLine: 'rgba(255,255,255,0.02)',
+    glowA: [212, 177, 120],
+    glowB: [78, 118, 106],
+  },
+  night: {
+    skyA: 'rgba(88, 111, 155, 0.12)',
+    skyB: 'rgba(58, 90, 125, 0.08)',
+    skyC: 'rgba(147, 122, 170, 0.05)',
+    auraA: 'rgba(106, 125, 176, 0.11)',
+    auraB: 'rgba(77, 108, 152, 0.08)',
+    ambientTop: 'rgba(210,220,255,0.03)',
+    ambientGold: 'rgba(107, 128, 184, 0.08)',
+    ambientLine: 'rgba(225,232,255,0.02)',
+    glowA: [110, 132, 186],
+    glowB: [96, 113, 168],
+  },
+};
+
+const LOTUS_PALETTES = {
+  idle: { bg: [5, 6, 7], a: [213, 179, 119], b: [45, 92, 82], c: [241, 231, 211] },
+  listening: { bg: [6, 7, 8], a: [222, 193, 136], b: [82, 126, 112], c: [241, 231, 211] },
+  thinking: { bg: [5, 7, 8], a: [126, 152, 137], b: [180, 188, 176], c: [241, 231, 211] },
+  speaking: { bg: [7, 6, 7], a: [224, 183, 125], b: [142, 93, 91], c: [241, 231, 211] },
+  error: { bg: [9, 6, 7], a: [185, 129, 123], b: [184, 147, 94], c: [241, 231, 211] },
+};
+
+let W = 0;
+let H = 0;
+let cx = 0;
+let cy = 0;
+let lastTime = 0;
+let t = 0;
+let state = 'idle';
+let currentMode = 'fast';
+let amp = 0;
+let ampTarget = 0;
+let transBlend = 1;
+let transDuration = 1;
+let errorTimer = 0;
+let perfScale = 1;
+let dayPart = '';
+
+function lerp(a, b, n) { return a + (b - a) * n; }
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+function easeOut(v) { return 1 - Math.pow(1 - v, 3); }
+function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + Math.max(0, Math.min(1, a)) + ')'; }
+function mix(a, b, n) { return [lerp(a[0], b[0], n), lerp(a[1], b[1], n), lerp(a[2], b[2], n)]; }
+function pal() { return LOTUS_PALETTES[state] || LOTUS_PALETTES.idle; }
+function dayPal() { return DAYPARTS[dayPart] || DAYPARTS.afternoon; }
+
+function getDayPartForHour(hour) {
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 18) return 'afternoon';
+  return 'night';
+}
+
+function applyDayPart(name) {
+  if (!DAYPARTS[name] || name === dayPart) return;
+  dayPart = name;
+  const p = DAYPARTS[name];
+  const root = document.documentElement.style;
+  root.setProperty('--sky-a', p.skyA);
+  root.setProperty('--sky-b', p.skyB);
+  root.setProperty('--sky-c', p.skyC);
+  root.setProperty('--aura-a', p.auraA);
+  root.setProperty('--aura-b', p.auraB);
+  root.setProperty('--ambient-top', p.ambientTop);
+  root.setProperty('--ambient-gold', p.ambientGold);
+  root.setProperty('--ambient-line', p.ambientLine);
+  document.body.dataset.daypart = name;
+}
+
+function syncDayPart() {
+  applyDayPart(getDayPartForHour(new Date().getHours()));
+}
 
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  W = window.innerWidth; H = window.innerHeight;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  perfScale = W < 700 || H < 760 ? 0.82 : W < 1100 ? 0.9 : 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  barCanvas.width = W * dpr; barCanvas.height = H * dpr;
-  barCanvas.style.width = W + 'px'; barCanvas.style.height = H + 'px';
-  barCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  cx = W / 2; cy = H / 2;
-  s = Math.max(0.4, Math.min(2.5, Math.min(W, H) / 620));
+  cx = W * 0.5;
+  cy = H * (W < 640 ? 0.49 : 0.515);
 }
 window.addEventListener('resize', resize);
-screen.orientation && screen.orientation.addEventListener('change', () => setTimeout(resize, 100));
-resize();
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-function ease(t) { return t * t * (3 - 2 * t); }
-function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, a)})`; }
-
-// Error color tint
-const ERR_COL = [180, 50, 30];
-function tintCol(c, tint) {
-  if (tint < 0.01) return c;
-  return [
-    Math.round(lerp(c[0], ERR_COL[0], tint)),
-    Math.round(lerp(c[1], ERR_COL[1], tint)),
-    Math.round(lerp(c[2], ERR_COL[2], tint)),
-  ];
+if (screen.orientation && screen.orientation.addEventListener) {
+  screen.orientation.addEventListener('change', function () { setTimeout(resize, 100); });
 }
+resize();
+syncDayPart();
+setInterval(syncDayPart, 60000);
 
-// State params
 function getParams(st) {
   const p = {
-    coreR: 24, coreGlow: 0.8, pulseSpeed: 1.2, pulseAmp: 0.06,
-    ring1Alpha: 0.22, ring1Rot: 0.1,
-    ring2Alpha: 0.16, ring2Rot: -0.06,
-    ring3Alpha: 0.1, ring3Rot: 0.03,
-    dotAlpha: 0.24, dotPulse: 0.15,
-    petalAlpha: 0.15, petalRot: 0.05,
-    waveAlpha: 0.09, waveSpeed: 0.6, waveCount: 2,
-    yantraAlpha: 0.1, yantraRot: 0.02,
-    connectAlpha: 0.1,
-    breathe: 0.025, breathe2: 0.01,
-    blobAlpha: 0.08, blobSpeed: 0.3, blobScale: 1,
-    tendrilAlpha: 0.07, tendrilSpeed: 0.2,
-    warpAmt: 0.06,
-    errorTint: 0,
+    openness: 0.58,
+    pulse: 0.16,
+    spin: 0.08,
+    flare: 0.22,
+    glow: 0.22,
+    particles: 0.26,
   };
-  switch (st) {
-    case 'listening':
-      p.coreR = 18; p.coreGlow = 1.0; p.pulseSpeed = 0.8; p.pulseAmp = 0.02;
-      p.ring1Alpha = 0.3; p.ring1Rot = 0.02;
-      p.ring2Alpha = 0.2; p.ring2Rot = -0.01;
-      p.ring3Alpha = 0.08; p.ring3Rot = 0.005;
-      p.dotAlpha = 0.35; p.dotPulse = 0.05;
-      p.petalAlpha = 0.2; p.petalRot = 0.01;
-      p.waveAlpha = 0; p.waveSpeed = 0; p.waveCount = 0;
-      p.yantraAlpha = 0.15; p.yantraRot = 0.005;
-      p.connectAlpha = 0.15;
-      p.breathe = 0.008; p.breathe2 = 0.003;
-      p.blobAlpha = 0.04; p.blobSpeed = 0.1; p.blobScale = 0.6;
-      p.tendrilAlpha = 0.02; p.tendrilSpeed = 0.05;
-      p.warpAmt = 0.02;
-      break;
-    case 'thinking':
-      p.coreR = 18; p.coreGlow = 0.55; p.pulseSpeed = 3.0; p.pulseAmp = 0.04;
-      p.ring1Alpha = 0.35; p.ring1Rot = 0.6;
-      p.ring2Alpha = 0.3; p.ring2Rot = -0.45;
-      p.ring3Alpha = 0.25; p.ring3Rot = 0.3;
-      p.dotAlpha = 0.15; p.dotPulse = 0.4;
-      p.petalAlpha = 0.05; p.petalRot = 0.2;
-      p.waveAlpha = 0.03; p.waveSpeed = 0.5; p.waveCount = 1;
-      p.yantraAlpha = 0.25; p.yantraRot = 0.12;
-      p.connectAlpha = 0.2;
-      p.breathe = 0.015; p.breathe2 = 0.008;
-      p.blobAlpha = 0.1; p.blobSpeed = 1.2; p.blobScale = 1.1;
-      p.tendrilAlpha = 0.08; p.tendrilSpeed = 0.8;
-      p.warpAmt = 0.18;
-      break;
-    case 'speaking':
-      p.coreR = 32; p.coreGlow = 1.0; p.pulseSpeed = 2.0; p.pulseAmp = 0.15;
-      p.ring1Alpha = 0.2; p.ring1Rot = 0.08;
-      p.ring2Alpha = 0.15; p.ring2Rot = -0.05;
-      p.ring3Alpha = 0.12; p.ring3Rot = 0.03;
-      p.dotAlpha = 0.3; p.dotPulse = 0.4;
-      p.petalAlpha = 0.18; p.petalRot = 0.04;
-      p.waveAlpha = 0.2; p.waveSpeed = 1.8; p.waveCount = 5;
-      p.yantraAlpha = 0.06; p.yantraRot = 0.02;
-      p.connectAlpha = 0.08;
-      p.breathe = 0.04; p.breathe2 = 0.018;
-      p.blobAlpha = 0.12; p.blobSpeed = 0.5; p.blobScale = 1.3;
-      p.tendrilAlpha = 0.1; p.tendrilSpeed = 0.35;
-      p.warpAmt = 0.08;
-      break;
-    case 'error':
-      p.coreR = 20; p.coreGlow = 0.35; p.pulseSpeed = 0.6; p.pulseAmp = 0.05;
-      p.ring1Alpha = 0.1; p.ring1Rot = 0.015;
-      p.ring2Alpha = 0.06; p.ring2Rot = -0.01;
-      p.ring3Alpha = 0.03; p.ring3Rot = 0.005;
-      p.dotAlpha = 0.08; p.dotPulse = 0.1;
-      p.petalAlpha = 0.04; p.petalRot = 0.01;
-      p.waveAlpha = 0; p.waveSpeed = 0; p.waveCount = 0;
-      p.yantraAlpha = 0.03; p.yantraRot = 0.005;
-      p.connectAlpha = 0.03;
-      p.breathe = 0.01; p.breathe2 = 0;
-      p.blobAlpha = 0.03; p.blobSpeed = 0.15; p.blobScale = 0.7;
-      p.tendrilAlpha = 0.01; p.tendrilSpeed = 0.05;
-      p.warpAmt = 0.03;
-      p.errorTint = 1;
-      break;
+  if (st === 'listening') {
+    p.openness = 0.78; p.pulse = 0.28; p.spin = 0.14; p.flare = 0.36; p.glow = 0.34; p.particles = 0.48;
+  } else if (st === 'thinking') {
+    p.openness = 0.46; p.pulse = 0.09; p.spin = 0.18; p.flare = 0.18; p.glow = 0.24; p.particles = 0.18;
+  } else if (st === 'speaking') {
+    p.openness = 0.9; p.pulse = 0.34; p.spin = 0.12; p.flare = 0.46; p.glow = 0.42; p.particles = 0.54;
+  } else if (st === 'error') {
+    p.openness = 0.34; p.pulse = 0.05; p.spin = 0.04; p.flare = 0.16; p.glow = 0.16; p.particles = 0.12;
+  }
+  if (currentMode === 'fast') {
+    p.spin *= 1.08;
+    p.pulse *= 1.04;
+  } else if (currentMode === 'deep') {
+    p.spin *= 0.82;
+    p.glow *= 1.16;
   }
   return p;
 }
 
-let prev = getParams('idle');
-let tgt = getParams('idle');
-let cur = getParams('idle');
-let errorTimer = 0;
+let prevParams = getParams('idle');
+let targetParams = getParams('idle');
+let cur = Object.assign({}, prevParams);
 
-function setState(newState) {
-  if (newState === state) return;
-  const fromError = state === 'error';
-  state = newState;
-  prev = Object.assign({}, cur);
-  tgt = getParams(newState);
-  transBlend = 0;
-transDuration = (fromError && newState === 'idle') ? 1.5 : (TRANS_DURATIONS[newState] || 0.8);
-  if (newState === 'error') errorTimer = 0;
+function updateModeChrome() {
+  modeLabel.textContent = MODE_COPY[currentMode] || currentMode;
 }
 
-// Amplitude (0-1) from audio, smoothed
-let amp = 0, ampTarget = 0;
-function setAmplitude(v) { ampTarget = Math.max(0, Math.min(1, v)); }
+function updateStatusChrome() {
+  const copy = STATUS_COPY[state] || STATUS_COPY.idle;
+  stateWord.textContent = copy.word;
+  document.body.dataset.face = state;
+}
 
-window.vritti = { setState, getState: () => state, setAmplitude };
+function setState(newState, force) {
+  if (newState === state && !force) return;
+  state = newState;
+  prevParams = Object.assign({}, cur);
+  targetParams = getParams(newState);
+  transBlend = 0;
+  transDuration = ({ idle: 1.0, listening: 0.32, thinking: 0.5, speaking: 0.3, error: 0.55 })[newState] || 0.9;
+  if (currentMode === 'fast') transDuration *= 0.8;
+  if (currentMode === 'deep') transDuration *= 1.22;
+  if (newState === 'error') errorTimer = 0;
+  updateStatusChrome();
+}
 
+function setAmplitude(v) { ampTarget = clamp01(v); }
+window.vritti = { setState, getState: function () { return state; }, setAmplitude };
 
 function blend(dt) {
-  if (transBlend < 1) {
-    transBlend = Math.min(1, transBlend + dt / transDuration);
-  }
-  const b = ease(Math.min(1, transBlend));
-  for (const k in tgt) {
-    if (typeof tgt[k] === 'number') cur[k] = lerp(prev[k], tgt[k], b);
-  }
+  if (transBlend < 1) transBlend = Math.min(1, transBlend + dt / transDuration);
+  const b = easeOut(transBlend);
+  Object.keys(targetParams).forEach(function (key) {
+    cur[key] = lerp(prevParams[key], targetParams[key], b);
+  });
 }
 
-// Vignette
-function drawVignette() {
-  const r = Math.max(cx, cy) * 1.2;
-  const g = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r);
-  g.addColorStop(0, 'rgba(10,10,15,0)');
-  g.addColorStop(0.7, 'rgba(10,10,15,0)');
-  g.addColorStop(1, 'rgba(5,5,8,0.5)');
+function drawGlow(x, y, r, color, alpha) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, rgba(color, alpha));
+  g.addColorStop(0.4, rgba(color, alpha * 0.42));
+  g.addColorStop(1, rgba(color, 0));
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-}
-
-// Blob
-function drawBlob(p) {
-  if (p.blobAlpha < 0.003) return;
-  const baseR = 80 * s * p.blobScale;
-  const points = 64;
-  const speed = t * p.blobSpeed;
-
-  for (let b = 0; b < 2; b++) {
-    const col = b === 0 ? COL.saffron : COL.teal;
-    const phase = b * 2.1;
-    const alpha = p.blobAlpha * (b === 0 ? 1 : 0.7);
-
-    ctx.beginPath();
-    for (let i = 0; i <= points; i++) {
-      const a = (i / points) * TAU;
-      const warp = baseR * (
-        1
-        + 0.15 * Math.sin(a * 3 + speed * 0.7 + phase)
-        + 0.1 * Math.sin(a * 5 - speed * 0.5 + phase * 1.3)
-        + 0.06 * Math.sin(a * 7 + speed * 1.1 + phase * 0.7)
-        + p.warpAmt * Math.sin(a * 2 + speed * 0.3)
-      );
-      const x = Math.cos(a) * warp;
-      const y = Math.sin(a) * warp;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, baseR * 1.3);
-    g.addColorStop(0, rgba(col, alpha * 0.6));
-    g.addColorStop(0.5, rgba(col, alpha * 0.2));
-    g.addColorStop(1, rgba(col, 0));
-    ctx.fillStyle = g;
-    ctx.fill();
-  }
-}
-
-// Tendrils
-function drawTendrils(p) {
-  if (p.tendrilAlpha < 0.003) return;
-  const count = 6;
-  const speed = t * p.tendrilSpeed;
-
-  ctx.lineWidth = 0.6 * s;
-
-  for (let i = 0; i < count; i++) {
-    const baseAngle = (i / count) * TAU + speed * 0.15;
-    const col = i % 2 === 0 ? COL.saffron : COL.tealLt;
-
-    ctx.beginPath();
-    const startR = 45 * s;
-    const sx = Math.cos(baseAngle) * startR;
-    const sy = Math.sin(baseAngle) * startR;
-    ctx.moveTo(sx, sy);
-
-    const segments = 20;
-    let angle = baseAngle;
-    let r = startR;
-    for (let j = 1; j <= segments; j++) {
-      const frac = j / segments;
-      angle += 0.08 * Math.sin(speed * 0.8 + i * 1.7 + frac * 3);
-      r += (3 + 1.5 * Math.sin(speed + i + frac * 2)) * s;
-      const x = Math.cos(angle) * r;
-      const y = Math.sin(angle) * r;
-      ctx.lineTo(x, y);
-    }
-
-    const alpha = p.tendrilAlpha * (0.7 + 0.3 * Math.sin(speed + i * 1.5));
-    ctx.strokeStyle = rgba(col, alpha);
-    ctx.stroke();
-  }
-}
-
-// Halo ring
-function drawHalo(radius, rot, alpha, color, width) {
-  if (alpha < 0.003) return;
-  const r = radius * s;
-  const w = width * s;
-  const pulse = 1 + 0.03 * Math.sin(t * 1.5 + radius * 0.01);
-
-  ctx.save();
-  ctx.rotate(t * rot);
-
-  const inner = r * pulse - w;
-  const outer = r * pulse + w;
-  const g1 = ctx.createRadialGradient(0, 0, inner - w, 0, 0, outer + w);
-  g1.addColorStop(0, rgba(color, 0));
-  g1.addColorStop(0.3, rgba(color, alpha * 0.15));
-  g1.addColorStop(0.5, rgba(color, alpha * 0.3));
-  g1.addColorStop(0.7, rgba(color, alpha * 0.15));
-  g1.addColorStop(1, rgba(color, 0));
   ctx.beginPath();
-  ctx.arc(0, 0, r * pulse, 0, TAU);
-  ctx.lineWidth = w * 4;
-  ctx.strokeStyle = g1;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(0, 0, r * pulse, 0, TAU);
-  ctx.lineWidth = 0.5 * s;
-  ctx.strokeStyle = rgba(color, alpha * 0.6);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
-// Core
-function drawCore(p) {
-  const pulse = 1 + Math.sin(t * p.pulseSpeed) * p.pulseAmp;
-  const r = p.coreR * s * pulse;
-  const et = p.errorTint || 0;
-  const coreSaffron = tintCol(COL.saffron, et);
-  const coreGold = tintCol(COL.gold, et);
-  const coreWhite = tintCol(COL.white, et);
-
-  const g1 = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 6);
-  g1.addColorStop(0, rgba(coreSaffron, p.coreGlow * 0.08));
-  g1.addColorStop(0.5, rgba(coreSaffron, p.coreGlow * 0.02));
-  g1.addColorStop(1, rgba(coreSaffron, 0));
-  ctx.fillStyle = g1;
-  ctx.fillRect(-cx, -cy, W, H);
-
-  const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.2);
-  g2.addColorStop(0, rgba(coreWhite, 0.85 * p.coreGlow));
-  g2.addColorStop(0.15, rgba(coreGold, 0.65 * p.coreGlow));
-  g2.addColorStop(0.4, rgba(coreSaffron, 0.25 * p.coreGlow));
-  g2.addColorStop(0.7, rgba(coreSaffron, 0.06 * p.coreGlow));
-  g2.addColorStop(1, rgba(coreSaffron, 0));
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 1.2, 0, TAU);
-  ctx.fillStyle = g2;
+  ctx.arc(x, y, r, 0, TAU);
   ctx.fill();
+}
 
-  const flk = 0.82 + 0.1 * Math.sin(t * 6.7) * Math.sin(t * 3.3)
-            + 0.08 * Math.sin(t * 9.1 + 0.5);
-  const g3 = ctx.createRadialGradient(0, -r * 0.08, 0, 0, 0, r * 0.35);
-  g3.addColorStop(0, rgba(coreWhite, 0.5 * flk * p.coreGlow));
-  g3.addColorStop(1, 'rgba(255,255,255,0)');
+function drawPetal(x, y, angle, length, width, color, alpha) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
   ctx.beginPath();
-  ctx.arc(0, 0, r * 0.35, 0, TAU);
-  ctx.fillStyle = g3;
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(width * 0.1, -width * 0.26, width * 0.92, -length * 0.54, length, 0);
+  ctx.bezierCurveTo(width * 0.92, length * 0.54, width * 0.1, width * 0.26, 0, 0);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, -length * 0.16, length, length * 0.16);
+  g.addColorStop(0, rgba(mix(color, [255, 255, 255], 0.44), alpha * 0.22));
+  g.addColorStop(0.42, rgba(color, alpha * 0.58));
+  g.addColorStop(1, rgba(mix(color, [10, 12, 16], 0.1), alpha * 0.04));
+  ctx.fillStyle = g;
   ctx.fill();
-
-  for (let i = 1; i <= 2; i++) {
-    const rr = r * (0.55 + i * 0.28);
-    ctx.beginPath();
-    ctx.arc(0, 0, rr, 0, TAU);
-    ctx.strokeStyle = rgba(coreGold, (0.1 - i * 0.025) * p.coreGlow);
-    ctx.lineWidth = 0.3 * s;
-    ctx.stroke();
-  }
-}
-
-// Dots
-function drawDots(radius, count, rot, alpha, pulseAmt, color) {
-  if (alpha < 0.003) return;
-  const r = radius * s;
-
-  ctx.save();
-  ctx.rotate(t * rot * 0.5);
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * TAU;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
-    const p = 1 + pulseAmt * Math.sin(t * 1.5 + i * 0.7);
-    const sizeVar = (i % 3 === 0) ? 1.3 : (i % 3 === 1) ? 1.0 : 0.7;
-    const dotR = 1.3 * s * p * sizeVar;
-
-    const g = ctx.createRadialGradient(x, y, 0, x, y, dotR * 3.5);
-    g.addColorStop(0, rgba(color, alpha * p * 0.25));
-    g.addColorStop(1, rgba(color, 0));
-    ctx.fillStyle = g;
-    ctx.fillRect(x - dotR * 3.5, y - dotR * 3.5, dotR * 7, dotR * 7);
-
-    ctx.beginPath();
-    ctx.arc(x, y, dotR, 0, TAU);
-    ctx.fillStyle = rgba(color, alpha * p);
-    ctx.fill();
-  }
   ctx.restore();
 }
 
-// Petals
-function drawPetals(radius, count, rot, alpha, color) {
-  if (alpha < 0.003) return;
-  const r = radius * s;
-
-  ctx.save();
-  ctx.rotate(t * rot);
-  ctx.globalAlpha = alpha;
-
-  for (let i = 0; i < count; i++) {
-    const ang = (i / count) * TAU;
-    const breath = 1 + 0.05 * Math.sin(t * 1.3 + i * (TAU / count) * 0.7);
-    const len = r * 0.32 * breath;
-    const w = r * 0.1;
-    const base = r * 0.48;
-
-    ctx.save();
-    ctx.rotate(ang);
-
-    ctx.beginPath();
-    ctx.moveTo(base, 0);
-    ctx.bezierCurveTo(base + len * 0.3, -w, base + len * 0.7, -w * 0.7, base + len, 0);
-    ctx.bezierCurveTo(base + len * 0.7, w * 0.7, base + len * 0.3, w, base, 0);
-
-    const g = ctx.createLinearGradient(base, 0, base + len, 0);
-    g.addColorStop(0, rgba(color, 0.7));
-    g.addColorStop(0.5, rgba(color, 0.2));
-    g.addColorStop(1, rgba(color, 0));
-    ctx.fillStyle = g;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(base + 2 * s, 0);
-    ctx.quadraticCurveTo(base + len * 0.5, -w * 0.06, base + len * 0.8, 0);
-    ctx.strokeStyle = rgba(COL.gold, 0.1);
-    ctx.lineWidth = 0.3 * s;
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  ctx.globalAlpha = 1;
-  ctx.restore();
+function drawSoftRing(radius, color, alpha, width, rotation, arcSpan) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, rotation, rotation + arcSpan);
+  ctx.strokeStyle = rgba(color, alpha);
+  ctx.lineWidth = width;
+  ctx.stroke();
 }
 
-// Connectors
-function drawConnectors(innerR, outerR, count, rot, alpha) {
-  if (alpha < 0.003) return;
-  const ri = innerR * s;
-  const ro = outerR * s;
-  const mid = (ri + ro) / 2;
+function drawLotusMandala() {
+  const base = Math.min(W, H) * (perfScale < 0.9 ? 0.102 : 0.114);
+  const p = pal();
+  const dp = dayPal();
+  const breathe = 1 + Math.sin(t * 0.76) * (0.035 + cur.pulse * 0.18) + amp * 0.06;
+  const open = cur.openness + amp * 0.12;
+  const rot = t * cur.spin;
+  const outerCount = 8;
+  const midCount = 8;
+  const innerCount = perfScale < 0.9 ? 6 : 7;
 
-  ctx.save();
-  ctx.rotate(t * rot * 0.3);
-  ctx.strokeStyle = rgba(COL.saffron, alpha);
-  ctx.lineWidth = 0.4 * s;
+  drawGlow(cx, cy - base * 0.18, base * 7.6, dp.glowA, 0.1 + cur.glow * 0.04);
+  drawGlow(cx, cy + base * 0.22, base * 5.8, dp.glowB, 0.085 + cur.flare * 0.03);
+  drawGlow(cx, cy, base * 4.3, p.a, 0.09 + cur.glow * 0.06);
+  drawGlow(cx, cy, base * 3.2, p.b, 0.06 + cur.glow * 0.05);
+  drawGlow(cx, cy, base * 1.6, p.c, 0.08 + cur.flare * 0.06);
 
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * TAU;
-    const nextA = ((i + 1) / count) * TAU;
-    const midA = (a + nextA) / 2;
+  drawSoftRing(base * 1.18, mix(p.c, p.a, 0.18), 0.12 + cur.glow * 0.06, 1.1, rot * 0.18, TAU);
+  drawSoftRing(base * 2.18, mix(p.a, p.b, 0.2), 0.08 + cur.glow * 0.05, 0.9, rot * -0.1, TAU);
 
-    const x1 = Math.cos(a) * ri, y1 = Math.sin(a) * ri;
-    const x2 = Math.cos(midA) * ro, y2 = Math.sin(midA) * ro;
-
-    const cpA1 = a + (midA - a) * 0.25;
-    const cpA2 = a + (midA - a) * 0.75;
-
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.bezierCurveTo(
-      Math.cos(cpA1) * (mid + 5 * s), Math.sin(cpA1) * (mid + 5 * s),
-      Math.cos(cpA2) * (mid - 5 * s), Math.sin(cpA2) * (mid - 5 * s),
-      x2, y2
-    );
-    ctx.stroke();
-
-    const mx2 = Math.cos(a - (midA - a)) * ro;
-    const my2 = Math.sin(a - (midA - a)) * ro;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.bezierCurveTo(
-      Math.cos(a - (midA - a) * 0.25) * (mid + 5 * s),
-      Math.sin(a - (midA - a) * 0.25) * (mid + 5 * s),
-      Math.cos(a - (midA - a) * 0.75) * (mid - 5 * s),
-      Math.sin(a - (midA - a) * 0.75) * (mid - 5 * s),
-      mx2, my2
-    );
-    ctx.stroke();
+  const dotRings = perfScale < 0.9 ? 2 : 3;
+  for (let r = 0; r < dotRings; r++) {
+    const dots = 10 + r * 8;
+    const rr = base * (1.6 + r * 0.58);
+    const drift = rot * (r % 2 ? -0.22 : 0.28) + r * 0.18;
+    for (let i = 0; i < dots; i++) {
+      const ang = drift + i * (TAU / dots);
+      const px = cx + Math.cos(ang) * rr;
+      const py = cy + Math.sin(ang) * rr;
+      const size = (r === 0 ? 2.2 : r === 1 ? 1.6 : 1.2) + amp * 0.28;
+      ctx.beginPath();
+      ctx.arc(px, py, size, 0, TAU);
+      ctx.fillStyle = rgba(i % 3 === 0 ? p.c : i % 2 ? p.a : p.b, 0.12 + cur.particles * 0.08 - r * 0.02);
+      ctx.fill();
+    }
   }
-  ctx.restore();
-}
-
-// Waves
-function drawWaves(p) {
-  const count = Math.round(p.waveCount);
-  for (let i = 0; i < count; i++) {
-    const phase = t * p.waveSpeed + i * (TAU / count);
-    const progress = (phase % TAU) / TAU;
-    const r = (55 + progress * 150) * s;
-    const alpha = p.waveAlpha * Math.sin(progress * Math.PI) * (1 - progress * 0.3);
-
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, TAU);
-    ctx.strokeStyle = rgba(COL.saffron, alpha);
-    ctx.lineWidth = (0.9 - progress * 0.5) * s;
-    ctx.stroke();
-  }
-}
-
-// Yantra
-function drawYantra(p) {
-  const alpha = p.yantraAlpha;
-  if (alpha < 0.003) return;
-
-  ctx.save();
-  ctx.rotate(t * p.yantraRot);
-  ctx.lineWidth = 0.45 * s;
 
   const layers = [
-    { r: 42, up: true,  a: 0.45 },
-    { r: 34, up: false, a: 0.35 },
-    { r: 26, up: true,  a: 0.28 },
-    { r: 18, up: false, a: 0.2 },
+    { count: outerCount, len: base * 2.48 * breathe * open, wid: base * 1.18, alpha: 0.34, offset: rot * 0.12, color: mix(p.a, p.c, 0.08) },
+    { count: midCount, len: base * 2.02 * breathe * (0.94 + open * 0.08), wid: base * 0.92, alpha: 0.28, offset: rot * -0.1 + TAU / 16, color: mix(p.b, p.c, 0.22) },
+    { count: innerCount, len: base * 1.34 * breathe, wid: base * 0.58, alpha: 0.24, offset: rot * 0.08 + TAU / 14, color: mix(p.a, p.b, 0.14) },
   ];
 
-  for (const layer of layers) {
-    const r = layer.r * s;
-    ctx.globalAlpha = alpha * layer.a / 0.45;
-    ctx.strokeStyle = rgba(COL.gold, layer.a);
-    ctx.beginPath();
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * TAU + (layer.up ? -Math.PI/2 : Math.PI/2);
-      const x = Math.cos(a) * r, y = Math.sin(a) * r;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  ctx.globalCompositeOperation = 'screen';
+  layers.forEach(function (layer) {
+    for (let i = 0; i < layer.count; i++) {
+      const ang = layer.offset + i * (TAU / layer.count);
+      const wobble = 1 + Math.sin(t * 1.12 + i * 0.7) * 0.018 + amp * 0.03;
+      drawPetal(cx, cy, ang, layer.len * wobble, layer.wid, layer.color, layer.alpha);
     }
-    ctx.closePath();
-    ctx.stroke();
+  });
+  ctx.globalCompositeOperation = 'source-over';
+
+  for (let i = 0; i < 6; i++) {
+    const ang = rot * 0.16 + i * (TAU / 6);
+    drawPetal(cx, cy, ang, base * 0.98 * (1 + amp * 0.04), base * 0.34, mix(p.c, p.a, 0.1), 0.2 + cur.flare * 0.05);
   }
 
-  ctx.globalAlpha = alpha * 0.45;
-  ctx.strokeStyle = rgba(COL.gold, 0.2);
-  ctx.lineWidth = 0.35 * s;
   ctx.beginPath();
-  for (let i = 0; i <= 6; i++) {
-    const a = (i / 6) * TAU;
-    const r = 10 * s;
-    i === 0 ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  ctx.stroke();
-
-  const bp = 0.8 + 0.2 * Math.sin(t * 2);
-  ctx.globalAlpha = alpha;
-  const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, 5 * s);
-  bg.addColorStop(0, rgba(COL.gold, 0.45 * bp));
-  bg.addColorStop(1, rgba(COL.gold, 0));
-  ctx.fillStyle = bg;
-  ctx.fillRect(-5 * s, -5 * s, 10 * s, 10 * s);
-  ctx.beginPath();
-  ctx.arc(0, 0, 1.3 * s, 0, TAU);
-  ctx.fillStyle = rgba(COL.gold, 0.6 * bp);
+  ctx.arc(cx, cy, base * (0.46 + amp * 0.08), 0, TAU);
+  ctx.fillStyle = rgba(mix(p.c, [255, 255, 255], 0.12), 0.86);
   ctx.fill();
 
-  ctx.globalAlpha = 1;
-  ctx.restore();
-}
+  ctx.beginPath();
+  ctx.arc(cx, cy, base * (0.74 + amp * 0.05), 0, TAU);
+  ctx.strokeStyle = rgba(p.c, 0.1 + cur.glow * 0.06);
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
-// Teardrops
-function drawTeardrops(radius, count, rot, alpha) {
-  if (alpha < 0.003) return;
-  const r = radius * s;
-
-  ctx.save();
-  ctx.rotate(t * rot * 0.7);
-  ctx.globalAlpha = alpha * 0.5;
-
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * TAU + TAU / (count * 2);
-    ctx.save();
-    ctx.rotate(a);
-    const sz = 5 * s;
+  const moteCount = perfScale < 0.9 ? 8 : 12;
+  for (let i = 0; i < moteCount; i++) {
+    const ang = i * (TAU / moteCount) + t * (0.08 + i * 0.002);
+    const rr = base * (2.9 + (i % 3) * 0.14);
+    const px = cx + Math.cos(ang) * rr;
+    const py = cy + Math.sin(ang) * rr;
+    const size = 1.3 + (i % 2) * 0.45 + amp * 0.45;
     ctx.beginPath();
-    ctx.moveTo(r, 0);
-    ctx.bezierCurveTo(r + sz * 0.6, -sz * 0.45, r + sz * 1.6, -sz * 0.15, r + sz * 2, 0);
-    ctx.bezierCurveTo(r + sz * 1.6, sz * 0.15, r + sz * 0.6, sz * 0.45, r, 0);
-    ctx.fillStyle = rgba(COL.tealLt, 0.45);
+    ctx.arc(px, py, size, 0, TAU);
+    ctx.fillStyle = rgba(i % 2 ? p.a : p.b, 0.08 + cur.particles * 0.1);
     ctx.fill();
-    ctx.restore();
   }
 
-  ctx.globalAlpha = 1;
-  ctx.restore();
+  if (state === 'error') {
+    ctx.strokeStyle = rgba([185, 129, 123], 0.5);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, base * 2.95, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
-// Solid ring
-function drawSolidRing(radius, alpha, color) {
-  if (alpha < 0.003) return;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * s, 0, TAU);
-  ctx.strokeStyle = rgba(color, alpha);
-  ctx.lineWidth = 0.3 * s;
-  ctx.stroke();
-}
-
-
-// Main loop
-function frame(timestamp) {
-  if (!lastTime) lastTime = timestamp;
-  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
-  lastTime = timestamp;
+function frame(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
   t += dt;
 
   if (state === 'error') {
@@ -612,210 +818,504 @@ function frame(timestamp) {
   }
 
   blend(dt);
-
-  // Simulate amplitude when model is speaking (pulsing pattern)
   if (state === 'speaking' && !micActive) {
-    ampTarget = 0.3 + 0.25 * Math.sin(t * 7.5) * Math.sin(t * 3.2)
-              + 0.1 * Math.sin(t * 11.3 + 0.7);
-    ampTarget = Math.max(0, ampTarget);
-  }
-
-  // Smooth amplitude toward target
-  amp += (ampTarget - amp) * Math.min(1, dt * 12);
-
-  // Amplitude modulation on top of blended params
-  if (amp > 0.01) {
-    const a = amp;
-    cur.coreR += a * 8;
-    cur.coreGlow += a * 0.3;
-    cur.breathe += a * 0.03;
-    cur.dotPulse += a * 0.3;
-    cur.blobScale += a * 0.2;
-    if (state === 'speaking') {
-      cur.waveAlpha += a * 0.15;
-      cur.waveSpeed += a * 0.8;
+    if (currentAudio && playbackAnalyser && playbackWaveform) {
+      ampTarget = sampleRms(playbackAnalyser, playbackWaveform, 6.5);
+    } else {
+      ampTarget = Math.max(0, 0.24 + 0.18 * Math.sin(t * 6.7) * Math.sin(t * 3.1) + 0.06 * Math.sin(t * 10.2));
     }
-    if (state === 'listening') {
-      cur.ring1Alpha += a * 0.15;
-      cur.ring2Alpha += a * 0.1;
-      cur.yantraAlpha += a * 0.1;
-    }
-
-    // Petal Unfurl — petals brighten and rotate with voice
-    cur.petalAlpha += a * 0.4;
-    cur.petalRot += a * 0.08;
-    cur.connectAlpha += a * 0.2;
   }
+  amp += (ampTarget - amp) * Math.min(1, dt * 10);
 
-  const breathe = 1
-    + Math.sin(t * 1.1) * cur.breathe
-    + Math.sin(t * 2.7 + 0.4) * cur.breathe2;
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#0a0a0f';
+  const p = pal();
+  ctx.fillStyle = 'rgb(' + p.bg[0] + ',' + p.bg[1] + ',' + p.bg[2] + ')';
   ctx.fillRect(0, 0, W, H);
 
-  drawVignette();
+  const vignette = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.08, cx, cy, Math.max(W, H) * 0.6);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.42)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
 
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(breathe, breathe);
-
-  const et = cur.errorTint || 0;
-  const cSaffron = tintCol(COL.saffron, et);
-  const cTeal = tintCol(COL.teal, et);
-  const cTealLt = tintCol(COL.tealLt, et);
-  const cGold = tintCol(COL.gold, et);
-
-  ctx.globalCompositeOperation = 'lighter';
-
-  drawBlob(cur);
-  drawTendrils(cur);
-
-  drawWaves(cur);
-
-  drawHalo(140, cur.ring3Rot, cur.ring3Alpha, cTeal, 0.5);
-  drawDots(148, 16, cur.ring3Rot, cur.dotAlpha * 0.25, cur.dotPulse * 0.4, cTealLt);
-  drawPetals(130, 12, cur.ring3Rot * 0.8, cur.petalAlpha, cTeal);
-  drawTeardrops(130, 12, cur.ring3Rot * 0.8, cur.petalAlpha);
-  drawConnectors(105, 138, 8, cur.ring2Rot, cur.connectAlpha);
-
-  drawHalo(100, cur.ring2Rot, cur.ring2Alpha, cSaffron, 0.6);
-  drawDots(108, 12, cur.ring2Rot, cur.dotAlpha * 0.4, cur.dotPulse * 0.6, cGold);
-
-  drawPetals(90, 8, cur.ring1Rot * 0.6, cur.petalAlpha * 0.8, cSaffron);
-  drawTeardrops(90, 8, cur.ring1Rot * 0.6, cur.petalAlpha * 0.5);
-  drawConnectors(70, 98, 6, cur.ring1Rot, cur.connectAlpha * 0.7);
-
-  drawHalo(65, cur.ring1Rot, cur.ring1Alpha, cSaffron, 0.7);
-  drawDots(72, 8, cur.ring1Rot, cur.dotAlpha, cur.dotPulse, cGold);
-
-  drawSolidRing(48, cur.ring1Alpha * 0.25, cSaffron);
-
-  drawYantra(cur);
-
-  ctx.globalCompositeOperation = 'source-over';
-  drawCore(cur);
-
-  ctx.restore();
-
+  drawLotusMandala();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// Mic activation — click anywhere to start/stop
 let micActive = false;
 let micAnalyser = null;
 let waveform = null;
 let barLoopRunning = false;
+let micStream = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let processing = false;
+let silenceTimer = null;
+let voiceSocket = null;
+let streamingMode = false;
+let voiceSocketSupported = true;
+let playbackQueue = Promise.resolve();
+let currentAudio = null;
+let audioCtx = null;
+let micSource = null;
+let playbackAnalyser = null;
+let playbackWaveform = null;
+let playbackSource = null;
+const SILENCE_THRESHOLD = 0.02;
+const SILENCE_TIMEOUT = 650;
+const MAX_RECORDING_MS = 12000;
+const MIN_RECORDING_MS = 1200;
+let STREAMING_CHUNK_MS = 120;
+let PCM_SAMPLE_RATE = 16000;
+const micBtn = document.getElementById('micBtn');
+let runtimeConfigPromise = null;
+let recordingStartedAt = 0;
+let pendingSpeechEnd = false;
+const modes = ['fast', 'deep'];
 
-canvas.style.cursor = 'pointer';
-canvas.addEventListener('click', async () => {
-  // Toggle off
-  if (micActive) {
-    micActive = false;
+function clampInt(v, min, max, fb) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fb;
+}
+
+async function loadRuntimeConfig() {
+  try {
+    const r = await fetch('/v1/config', { signal: AbortSignal.timeout(2000) });
+    if (!r.ok) return;
+    const d = await r.json();
+    STREAMING_CHUNK_MS = clampInt(d.voice_stream_frame_ms, 20, 5000, STREAMING_CHUNK_MS);
+    PCM_SAMPLE_RATE = clampInt(d.voice_stream_sample_rate, 8000, 48000, PCM_SAMPLE_RATE);
+  } catch {}
+}
+
+function ensureRuntimeConfig() {
+  if (!runtimeConfigPromise) runtimeConfigPromise = loadRuntimeConfig();
+  return runtimeConfigPromise;
+}
+
+function ensureAudioContext() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(function () {});
+  return audioCtx;
+}
+
+function sampleRms(analyser, data, scale) {
+  if (!analyser || !data) return 0;
+  analyser.getFloatTimeDomainData(data);
+  let tot = 0;
+  for (let i = 0; i < data.length; i++) tot += data[i] * data[i];
+  return Math.min(1, Math.sqrt(tot / data.length) * scale);
+}
+
+function disconnectPlaybackSource() {
+  if (!playbackSource) return;
+  try { playbackSource.disconnect(); } catch {}
+  playbackSource = null;
+}
+
+function attachPlaybackAnalyser(audio) {
+  try {
+    const ctx = ensureAudioContext();
+    disconnectPlaybackSource();
+    if (!playbackAnalyser) {
+      playbackAnalyser = ctx.createAnalyser();
+      playbackAnalyser.fftSize = 1024;
+      playbackAnalyser.smoothingTimeConstant = 0.5;
+      playbackAnalyser.connect(ctx.destination);
+      playbackWaveform = new Float32Array(playbackAnalyser.fftSize);
+    }
+    playbackSource = ctx.createMediaElementSource(audio);
+    playbackSource.connect(playbackAnalyser);
+    return true;
+  } catch {
+    disconnectPlaybackSource();
+    return false;
+  }
+}
+
+function setMicRingLevel(level) {
+  micLevelArc.style.strokeDashoffset = String(RING_LEN * (1 - clamp01(level)));
+}
+
+function updateMicBtn() {
+  if (micActive) micBtn.classList.add('active');
+  else micBtn.classList.remove('active');
+  micWrap.classList.toggle('listening', micActive);
+  if (!micActive) setMicRingLevel(0);
+}
+
+function stopRecording() {
+  if (!micActive) return;
+  micActive = false;
+  updateMicBtn();
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
+  const wsOpen = streamingMode && voiceSocket && voiceSocket.readyState === WebSocket.OPEN;
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    if (wsOpen) pendingSpeechEnd = true;
+    else {
+      try { mediaRecorder.requestData(); } catch {}
+    }
+    mediaRecorder.stop();
+    if (wsOpen) {
+      processing = true;
+      setState('thinking');
+      setAmplitude(0);
+    }
+  } else if (wsOpen) {
+    voiceSocket.send(JSON.stringify({ type: 'speech_ended' }));
+    processing = true;
+    setState('thinking');
+    setAmplitude(0);
+  } else {
+    processing = false;
+    setAmplitude(0);
+    if (state !== 'error') setState('idle');
+  }
+}
+
+function stopCurrentPlayback() {
+  if (!currentAudio) return;
+  currentAudio.pause();
+  currentAudio.currentTime = 0;
+  disconnectPlaybackSource();
+  currentAudio = null;
+  setAmplitude(0);
+}
+
+function queueAudioPlayback(bytes, mime) {
+  playbackQueue = playbackQueue.then(function () {
+    return new Promise(function (resolve) {
+      const url = URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/mp3' }));
+      const audio = new Audio(url);
+      currentAudio = audio;
+      setState('speaking');
+      attachPlaybackAnalyser(audio);
+      const done = function () {
+        disconnectPlaybackSource();
+        setAmplitude(0);
+        URL.revokeObjectURL(url);
+        if (currentAudio === audio) currentAudio = null;
+        resolve();
+      };
+      audio.onended = done;
+      audio.onerror = done;
+      audio.onpause = function () {
+        if (audio.ended) return;
+        setAmplitude(0);
+      };
+      audio.play().catch(done);
+    });
+  });
+  return playbackQueue;
+}
+
+function closeVoiceSocket() {
+  if (!voiceSocket) return;
+  try {
+    if (voiceSocket.readyState === WebSocket.OPEN) voiceSocket.send(JSON.stringify({ type: 'session_end' }));
+    voiceSocket.close();
+  } catch {}
+  voiceSocket = null;
+}
+
+function encodeBytesBase64(bytes) {
+  let s = '';
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+  }
+  return btoa(s);
+}
+
+async function encodeBlobBase64(blob) {
+  return encodeBytesBase64(new Uint8Array(await blob.arrayBuffer()));
+}
+
+function handleVoiceEvent(msg) {
+  if (msg.type === 'session_ready') return;
+  if (msg.type === 'session_unavailable') {
+    voiceSocketSupported = false;
+    streamingMode = false;
+    processing = false;
+    closeVoiceSocket();
+    if (micActive) setState('listening');
+    return;
+  }
+  if (msg.type === 'transcript_partial' || msg.type === 'stt' || msg.type === 'transcript_final') return;
+  if (msg.type === 'assistant_audio_chunk' || msg.type === 'audio') {
+    queueAudioPlayback(Uint8Array.from(atob(msg.data), function (c) { return c.charCodeAt(0); }), msg.mime_type || 'audio/mp3');
+    return;
+  }
+  if (msg.type === 'assistant_done' || msg.type === 'done') {
+    playbackQueue.finally(function () {
+      setState('idle');
+      setAmplitude(0);
+      processing = false;
+      if (!micActive) closeVoiceSocket();
+    });
+    return;
+  }
+  if (msg.type === 'cancelled') {
+    stopCurrentPlayback();
     setState('idle');
     setAmplitude(0);
-    canvas.style.cursor = 'pointer';
+    processing = false;
+    if (!micActive) closeVoiceSocket();
+    return;
+  }
+  if (msg.type === 'error') {
+    if (String(msg.detail || '').includes('HTTP 404')) {
+      voiceSocketSupported = false;
+      streamingMode = false;
+      processing = false;
+      closeVoiceSocket();
+      if (micActive) setState('listening');
+      return;
+    }
+    stopCurrentPlayback();
+    setState('error');
+    setTimeout(function () { setState('idle'); }, 2000);
+    processing = false;
+    closeVoiceSocket();
+  }
+}
+
+function connectVoiceSocket() {
+  if (!voiceSocketSupported) return Promise.reject(new Error('disabled'));
+  return new Promise(function (resolve, reject) {
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/v1/voice/ws');
+    let settled = false;
+    ws.onopen = function () {
+      settled = true;
+      voiceSocket = ws;
+      ws.send(JSON.stringify({ type: 'session_start', mode: currentMode || 'fast' }));
+      resolve(ws);
+    };
+    ws.onmessage = function (e) {
+      try { handleVoiceEvent(JSON.parse(e.data)); } catch {}
+    };
+    ws.onerror = function () {
+      if (!settled) reject(new Error('ws failed'));
+    };
+    ws.onclose = function () {
+      if (voiceSocket === ws) voiceSocket = null;
+      streamingMode = false;
+      processing = false;
+      if (!settled) {
+        reject(new Error('ws closed'));
+        return;
+      }
+      if (!micActive) {
+        playbackQueue.finally(function () {
+          processing = false;
+          setAmplitude(0);
+          if (state !== 'error') setState('idle');
+        });
+      }
+    };
+  });
+}
+
+async function sendAudioToGateway(blob) {
+  processing = true;
+  setState('thinking');
+  setAmplitude(0);
+  try {
+    const form = new FormData();
+    form.append('file', blob, 'audio.webm');
+    const resp = await fetch('/v1/voice-proxy', {
+      method: 'POST',
+      headers: { 'x-voice-mode': currentMode || 'fast' },
+      body: form,
+    });
+    if (!resp.ok) {
+      setState('error');
+      setTimeout(function () { setState('idle'); }, 2000);
+      processing = false;
+      return;
+    }
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buf += dec.decode(chunk.value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === 'audio') {
+            setState('speaking');
+            const audioData = Uint8Array.from(atob(msg.data), function (c) { return c.charCodeAt(0); });
+            const url = URL.createObjectURL(new Blob([audioData], { type: 'audio/mp3' }));
+            const audio = new Audio(url);
+            await new Promise(function (resolve) {
+              audio.onended = resolve;
+              audio.onerror = resolve;
+              audio.play().catch(resolve);
+            });
+            URL.revokeObjectURL(url);
+          } else if (msg.type === 'error') {
+            setState('error');
+            setTimeout(function () { setState('idle'); }, 2000);
+          }
+        } catch {}
+      }
+    }
+  } catch {
+    setState('error');
+    setTimeout(function () { setState('idle'); }, 2000);
+  }
+  setState('idle');
+  setAmplitude(0);
+  processing = false;
+}
+
+async function startStreamingVoice() {
+  try {
+    await connectVoiceSocket();
+    streamingMode = true;
+  } catch (e) {
+    if (String(e && e.message || '').includes('404')) voiceSocketSupported = false;
+    streamingMode = false;
+  }
+  recordedChunks = [];
+  pendingSpeechEnd = false;
+  const chunkMs = streamingMode ? STREAMING_CHUNK_MS : Math.min(STREAMING_CHUNK_MS, 120);
+  mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm;codecs=opus' });
+  mediaRecorder.ondataavailable = async function (e) {
+    if (!e.data || e.data.size <= 0) return;
+    if (streamingMode && voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+      try {
+        voiceSocket.send(JSON.stringify({
+          type: 'audio_chunk',
+          format: 'webm',
+          mime_type: e.data.type || 'audio/webm',
+          chunk_ms: chunkMs,
+          data: await encodeBlobBase64(e.data),
+        }));
+        return;
+      } catch {}
+    }
+    recordedChunks.push(e.data);
+  };
+  mediaRecorder.onstop = async function () {
+    if (streamingMode && voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+      if (pendingSpeechEnd) {
+        pendingSpeechEnd = false;
+        voiceSocket.send(JSON.stringify({ type: 'speech_ended' }));
+      }
+      return;
+    }
+    if (recordedChunks.length > 0) await sendAudioToGateway(new Blob(recordedChunks, { type: 'audio/webm' }));
+    else {
+      setState('idle');
+      setAmplitude(0);
+    }
+  };
+  mediaRecorder.start(chunkMs);
+}
+
+async function toggleMic() {
+  if (processing && !micActive) return;
+  await ensureRuntimeConfig();
+  if (micActive) {
+    if (currentAudio) {
+      stopCurrentPlayback();
+      if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) voiceSocket.send(JSON.stringify({ type: 'interrupt' }));
+    }
+    stopRecording();
     return;
   }
 
-  // First time — set up audio
-  if (!micAnalyser) {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = new AudioContext();
-    const src = audioCtx.createMediaStreamSource(stream);
+  if (!micStream) {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!audioCtx) audioCtx = new AudioContext({ sampleRate: PCM_SAMPLE_RATE });
+    micSource = audioCtx.createMediaStreamSource(micStream);
     const gain = audioCtx.createGain();
     gain.gain.value = 4.0;
     micAnalyser = audioCtx.createAnalyser();
     micAnalyser.fftSize = 2048;
     micAnalyser.smoothingTimeConstant = 0.3;
-    src.connect(gain);
+    micSource.connect(gain);
     gain.connect(micAnalyser);
     waveform = new Float32Array(micAnalyser.fftSize);
-    setInterval(() => { if (audioCtx.state === 'suspended') audioCtx.resume(); }, 1000);
+    setInterval(function () {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }, 1000);
   }
 
+  await startStreamingVoice();
+  recordingStartedAt = performance.now();
   micActive = true;
+  processing = streamingMode;
   setState('listening');
-  canvas.style.cursor = 'none';
+  updateMicBtn();
+  if (streamingMode && voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+    voiceSocket.send(JSON.stringify({ type: 'speech_started' }));
+  }
 
-  // Start mic reading loop on the overlay canvas (only once)
   if (!barLoopRunning) {
     barLoopRunning = true;
     let smoothRms = 0;
-
-    function micLoop() {
+    let silenceStart = 0;
+    (function micLoop() {
       if (micActive && micAnalyser && waveform) {
-        micAnalyser.getFloatTimeDomainData(waveform);
-        let total = 0;
-        for (let i = 0; i < waveform.length; i++) total += waveform[i] * waveform[i];
-        const rms = Math.min(1, Math.sqrt(total / waveform.length) * 5);
-        smoothRms += (rms - smoothRms) * 0.3;
+        smoothRms += (sampleRms(micAnalyser, waveform, 5) - smoothRms) * 0.3;
         setAmplitude(smoothRms);
+        setMicRingLevel(smoothRms);
+        if (smoothRms < SILENCE_THRESHOLD) {
+          const now = performance.now();
+          if (now - recordingStartedAt < MIN_RECORDING_MS) silenceStart = 0;
+          else if (!silenceStart) silenceStart = now;
+          else if (now - silenceStart > SILENCE_TIMEOUT) {
+            silenceStart = 0;
+            stopRecording();
+          }
+        } else {
+          silenceStart = 0;
+        }
       }
       requestAnimationFrame(micLoop);
-    }
-    micLoop();
+    })();
   }
 
-  // Auto-stop after 1 minute
-  setTimeout(() => {
-    if (micActive) {
-      micActive = false;
-      setState('idle');
-      setAmplitude(0);
-      canvas.style.cursor = 'pointer';
-    }
-  }, 60000);
-});
-
-// Health check
-async function checkHealth() {
-  try {
-    const res = await fetch('/health', { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    healthDot.className = (data.status === 'ok' || data.status === 'degraded') ? 'green' : 'yellow';
-  } catch { healthDot.className = 'red'; }
+  silenceTimer = setTimeout(function () {
+    if (micActive) stopRecording();
+  }, MAX_RECORDING_MS);
 }
-checkHealth();
-setInterval(checkHealth, 30000);
+micBtn.addEventListener('click', toggleMic);
 
-// Poll state from voice pipeline — skip when mic is active locally
 async function pollState() {
   if (micActive) return;
   try {
-    const res = await fetch('/v1/state', { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.state && data.state !== state) setState(data.state);
+    const r = await fetch('/v1/state', { signal: AbortSignal.timeout(2000) });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.state && d.state !== state) setState(d.state);
   } catch {}
 }
-setInterval(pollState, 200);
-
-// Mode selector
-const modeBtn = document.getElementById('modeBtn');
-const modes = ['fast', 'balanced', 'deep'];
-const modeLabels = { fast: '⚡ Fast', balanced: '⚖ Balanced', deep: '🧠 Deep' };
-let currentMode = 'fast';
+setInterval(pollState, 500);
 
 async function loadMode() {
   try {
-    const res = await fetch('/v1/mode', { signal: AbortSignal.timeout(2000) });
-    if (res.ok) {
-      const data = await res.json();
-      currentMode = data.mode || 'fast';
-    }
+    const r = await fetch('/v1/mode', { signal: AbortSignal.timeout(2000) });
+    if (r.ok) currentMode = (await r.json()).mode || 'fast';
   } catch {}
-  modeBtn.textContent = modeLabels[currentMode] || currentMode;
+  updateModeChrome();
 }
 
-modeBtn.addEventListener('click', async (e) => {
+modeBtn.addEventListener('click', async function (e) {
   e.stopPropagation();
-  const idx = (modes.indexOf(currentMode) + 1) % modes.length;
-  currentMode = modes[idx];
-  modeBtn.textContent = modeLabels[currentMode];
+  currentMode = modes[(modes.indexOf(currentMode) + 1) % modes.length];
+  updateModeChrome();
+  setState(state, true);
   try {
     await fetch('/v1/mode', {
       method: 'POST',
@@ -825,7 +1325,10 @@ modeBtn.addEventListener('click', async (e) => {
   } catch {}
 });
 
+updateStatusChrome();
+updateModeChrome();
 loadMode();
+ensureRuntimeConfig();
 </script>
 </body>
 </html>

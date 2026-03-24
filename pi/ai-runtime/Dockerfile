@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Default runtime configuration (can be overridden at docker run)
+# Default runtime config
 ENV LOCAL_BACKEND=ollama \
     LOCAL_MODEL=qwen3.5:2b \
     OLLAMA_BASE=http://host.docker.internal:11434 \
@@ -21,4 +21,3 @@ ENV LOCAL_BACKEND=ollama \
 EXPOSE 8000
 
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
-

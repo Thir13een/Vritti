@@ -89,6 +89,191 @@ section_box() {
 
 result_line() { printf "  ${BOLD}${SAFFRON}  %-18s${RST} %s\n" "$1" "$2"; }
 
+have_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+install_apt_packages() {
+  local label="$1"
+  shift
+  doing "Installing ${label}"
+  apt-get install -y -qq "$@" 2>&1 | stream_progress
+  ok "${label} installed"
+}
+
+install_first_available_package() {
+  local label="$1"
+  shift
+  local candidate=""
+  for candidate in "$@"; do
+    doing "Installing ${label}" 
+    if apt-get install -y -qq "$candidate" 2>&1 | stream_progress; then
+      ok "${label} installed" "package: ${candidate}"
+      return 0
+    fi
+  done
+  fail "No install candidate found for ${label} (tried: $*)"
+  exit 1
+}
+
+install_chromium_package() {
+  ensure_snap_chromium_wrapper() {
+    cat > /usr/bin/chromium-browser <<'EOF'
+#!/usr/bin/env bash
+exec /snap/bin/chromium "$@"
+EOF
+    chmod 755 /usr/bin/chromium-browser
+  }
+
+  if [[ -x /usr/bin/chromium-browser ]]; then
+    if [[ -L /usr/bin/chromium-browser ]] && [[ "$(readlink -f /usr/bin/chromium-browser)" == "/usr/bin/snap" ]]; then
+      ensure_snap_chromium_wrapper
+      ok "Chromium kiosk browser available" "path: /snap/bin/chromium (via chromium-browser wrapper)"
+      return 0
+    fi
+    ok "Chromium kiosk browser available" "path: /usr/bin/chromium-browser"
+    return 0
+  fi
+
+  if [[ -x /usr/bin/chromium ]]; then
+    ln -sf /usr/bin/chromium /usr/bin/chromium-browser
+    ok "Chromium kiosk browser available" "path: /usr/bin/chromium"
+    return 0
+  fi
+
+  if [[ -x /snap/bin/chromium ]]; then
+    ensure_snap_chromium_wrapper
+    ok "Chromium kiosk browser available" "path: /snap/bin/chromium (via chromium-browser wrapper)"
+    return 0
+  fi
+
+  if [[ -x /usr/bin/google-chrome ]] || [[ -x /usr/bin/google-chrome-stable ]]; then
+    ln -sf "$(command -v google-chrome || command -v google-chrome-stable)" /usr/bin/chromium-browser
+    ok "Chromium kiosk browser available" "path: $(command -v google-chrome || command -v google-chrome-stable)"
+    return 0
+  fi
+
+  doing "Installing Chromium kiosk browser"
+  if apt-get install -y -qq chromium-browser 2>&1 | stream_progress; then
+    ok "Chromium kiosk browser installed" "package: chromium-browser"
+    return 0
+  fi
+
+  if apt-get install -y -qq chromium 2>&1 | stream_progress; then
+    if [[ -x /usr/bin/chromium && ! -e /usr/bin/chromium-browser ]]; then
+      ln -sf /usr/bin/chromium /usr/bin/chromium-browser
+    fi
+    ok "Chromium kiosk browser installed" "package: chromium"
+    return 0
+  fi
+
+  fail "Unable to install Chromium browser (tried chromium-browser and chromium)"
+  return 1
+}
+
+require_cmd_or_fail() {
+  local cmd_name="$1" hint="$2"
+  if have_cmd "$cmd_name"; then
+    ok "Found ${cmd_name}"
+  else
+    fail "Missing required command: ${cmd_name} (${hint})"
+    exit 1
+  fi
+}
+
+install_runtime_python_deps() {
+  local base_requirements="/tmp/ai-runtime-requirements-no-torch.txt"
+  grep -vE '^[[:space:]]*torch([[:space:]=<>!~].*)?$' /opt/ai-runtime/requirements.txt > "$base_requirements"
+
+  doing "Installing Python dependencies"
+  /opt/ai-runtime/.venv/bin/pip install -q --upgrade pip 2>&1 | stream_progress
+  /opt/ai-runtime/.venv/bin/pip install -q -r "$base_requirements" 2>&1 | stream_progress
+
+  doing "Installing Torch runtime"
+  if [[ "$(uname -m)" == "x86_64" ]]; then
+    /opt/ai-runtime/.venv/bin/pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio 2>&1 | stream_progress
+  else
+    /opt/ai-runtime/.venv/bin/pip install -q torch torchaudio 2>&1 | stream_progress
+  fi
+}
+
+install_silero_vad_bundle() {
+  local target_dir="$1"
+  local repo_url="${SILERO_VAD_REPO:-https://github.com/snakers4/silero-vad.git}"
+
+  doing "Prefetching Silero VAD bundle"
+  rm -rf "${target_dir}.tmp"
+  if git clone --depth 1 "$repo_url" "${target_dir}.tmp" 2>&1 | stream_progress; then
+    rm -rf "$target_dir"
+    mv "${target_dir}.tmp" "$target_dir"
+    ok "Silero VAD bundle downloaded" "$target_dir"
+    return 0
+  fi
+
+  rm -rf "${target_dir}.tmp"
+  fail "Unable to download Silero VAD bundle from ${repo_url}"
+  return 1
+}
+
+install_ollama_backend() {
+  local model="$1"
+  local service_detected=0
+
+  if have_cmd ollama; then
+    ok "Ollama local backend available" "$(ollama --version 2>/dev/null | head -1)"
+  else
+    doing "Installing Ollama local backend"
+    if curl -fsSL https://ollama.com/install.sh | sh 2>&1 | stream_progress; then
+      ok "Ollama installed"
+    else
+      warn "Ollama install failed — local fallback will stay unavailable"
+      return 1
+    fi
+  fi
+
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files ollama.service 2>/dev/null | grep -q '^ollama.service'; then
+    service_detected=1
+    doing "Enabling Ollama service"
+    systemctl enable ollama >/dev/null 2>&1 || true
+    systemctl restart ollama >/dev/null 2>&1 || systemctl start ollama >/dev/null 2>&1 || true
+  fi
+
+  doing "Waiting for Ollama API"
+  local ready=0
+  local _attempt=""
+  for _attempt in $(seq 1 30); do
+    if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$ready" -ne 1 ]]; then
+    if [[ "$service_detected" -eq 0 ]]; then
+      warn "Ollama command installed, but no ready API was found on 127.0.0.1:11434"
+    else
+      warn "Ollama service did not become ready on 127.0.0.1:11434"
+    fi
+    return 1
+  fi
+  ok "Ollama API ready" "http://127.0.0.1:11434"
+
+  if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -Fxq "$model"; then
+    ok "Local fallback model available" "$model"
+    return 0
+  fi
+
+  doing "Pulling local fallback model ${model}"
+  if ollama pull "$model" 2>&1 | stream_progress; then
+    ok "Local fallback model pulled" "$model"
+    return 0
+  fi
+
+  warn "Model pull failed for ${model} — Ollama is installed, but local fallback is not ready yet"
+  return 1
+}
+
 # Utility functions
 generate_token() {
   if command -v openssl >/dev/null 2>&1; then
@@ -103,17 +288,23 @@ PY
 
 upsert_env() {
   local file="$1" key="$2" value="$3"
+  local tmp_file
   touch "$file"
-  if grep -q "^${key}=" "$file"; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "$file"
-  else
-    printf "%s=%s\n" "$key" "$value" >>"$file"
-  fi
+  tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
+  awk -F= -v key="$key" -v value="$value" '
+    BEGIN { updated=0 }
+    $1 == key { print key "=" value; updated=1; next }
+    { print }
+    END {
+      if (!updated) print key "=" value
+    }
+  ' "$file" > "$tmp_file"
+  mv "$tmp_file" "$file"
 }
 
 get_env() {
   local file="$1" key="$2"
-  awk -F= -v key="$key" '$1==key {print $2}' "$file" | tail -n1
+  awk -F= -v key="$key" '$1==key { print substr($0, index($0, "=") + 1) }' "$file" | tail -n1
 }
 
 register_with_gateway() {
@@ -156,7 +347,7 @@ info "Source directory : ${BOLD}${WHITE}${REPO_DIR}${RST}"
 info "Hostname         : ${BOLD}${WHITE}$(hostname)${RST}"
 info "Time             : $(date '+%Y-%m-%d %H:%M:%S')"
 
-# Detect non-root user early (needed for chown in later steps)
+# Resolve Pi user
 PI_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
 if ! id "$PI_USER" &>/dev/null; then
   PI_USER="pi"
@@ -164,18 +355,25 @@ fi
 
 # Step 1: System packages
 step_header 1 "Installing system packages"
-info "Installing Python, pip, curl."
+info "Installing Python, audio, kiosk, and build dependencies."
 echo ""
 
 doing "Updating package lists"
 apt-get update -qq 2>&1 | stream_progress
 ok "Package lists updated"
 
-doing "Installing python3, python3-venv, python3-pip, curl"
-apt-get install -y -qq python3 python3-venv python3-pip curl 2>&1 | stream_progress
-ok "System packages installed"
+install_apt_packages "core packages" \
+  python3 python3-venv python3-pip python3-dev curl git build-essential pkg-config
+install_apt_packages "audio packages" \
+  portaudio19-dev ffmpeg mpg123
+install_first_available_package "numeric runtime packages" \
+  libatlas-base-dev libopenblas-dev
+install_chromium_package
 
 info "Python version: ${BOLD}$(python3 --version 2>/dev/null)${RST}"
+require_cmd_or_fail ffmpeg "required for gateway audio compression"
+require_cmd_or_fail mpg123 "required for Pi audio playback"
+require_cmd_or_fail chromium-browser "required for kiosk mode"
 step_done
 
 # Step 2: Model selection
@@ -234,6 +432,16 @@ echo ""
 doing "Creating /opt/ai-runtime"
 mkdir -p /opt/ai-runtime
 
+doing "Creating local model directories"
+mkdir -p /opt/ai-runtime/models
+chown "${PI_USER}:${PI_USER}" /opt/ai-runtime/models
+ok "Model directory ready" "/opt/ai-runtime/models"
+
+doing "Creating shared runtime state directory"
+mkdir -p /opt/ai-runtime/run
+chown "${PI_USER}:${PI_USER}" /opt/ai-runtime/run
+ok "Shared state directory ready" "/opt/ai-runtime/run"
+
 doing "Copying runtime source files"
 cp "${REPO_DIR}/ai-runtime/"*.py /opt/ai-runtime/
 cp "${REPO_DIR}/ai-runtime/requirements.txt" /opt/ai-runtime/
@@ -257,11 +465,36 @@ doing "Creating Python virtual environment"
 python3 -m venv /opt/ai-runtime/.venv
 ok "Virtual environment created" "/opt/ai-runtime/.venv"
 
-doing "Installing Python dependencies"
-/opt/ai-runtime/.venv/bin/pip install -q --upgrade pip 2>&1 | stream_progress
-/opt/ai-runtime/.venv/bin/pip install -q -r /opt/ai-runtime/requirements.txt 2>&1 | stream_progress
+install_runtime_python_deps
 PKG_COUNT=$(/opt/ai-runtime/.venv/bin/pip list --format=columns 2>/dev/null | tail -n +3 | wc -l)
 ok "Dependencies installed" "${PKG_COUNT} packages (fastapi, uvicorn, pydantic...)"
+
+install_silero_vad_bundle "/opt/ai-runtime/models/silero-vad"
+
+doing "Verifying Python runtime dependencies"
+/opt/ai-runtime/.venv/bin/python - <<'PY'
+import importlib
+modules = ["fastapi", "uvicorn", "pydantic", "numpy", "torch", "torchaudio", "pyaudio"]
+missing = [name for name in modules if importlib.import_module(name) is None]
+if missing:
+    raise SystemExit("missing imports: " + ", ".join(missing))
+PY
+ok "Python runtime dependencies verified" "fastapi, numpy, torch, torchaudio, pyaudio"
+
+doing "Verifying local Silero VAD bundle"
+SILERO_VAD_DIR=/opt/ai-runtime/models/silero-vad /opt/ai-runtime/.venv/bin/python - <<'PY'
+import os
+from pathlib import Path
+import torch
+
+repo_dir = Path(os.environ["SILERO_VAD_DIR"])
+if not repo_dir.exists():
+    raise SystemExit(f"missing Silero VAD directory: {repo_dir}")
+model, _ = torch.hub.load(str(repo_dir), "silero_vad", source="local")
+if model is None:
+    raise SystemExit("Silero VAD model load returned None")
+PY
+ok "Local Silero VAD bundle verified" "/opt/ai-runtime/models/silero-vad"
 
 if [[ ! -f "$RUNTIME_ENV" ]]; then
   doing "Creating runtime .env from example"
@@ -279,6 +512,15 @@ ok "Runtime .env secured" "owner-only read/write (600)"
 doing "Setting model to ${SELECTED_MODEL}"
 upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
 ok "Model configured" "LOCAL_MODEL=${SELECTED_MODEL}"
+
+doing "Provisioning local fallback backend"
+if install_ollama_backend "$SELECTED_MODEL"; then
+  upsert_env "$RUNTIME_ENV" "LOCAL_BACKEND" "ollama"
+  upsert_env "$RUNTIME_ENV" "OLLAMA_BASE" "http://127.0.0.1:11434"
+  ok "Local fallback configured" "backend: ollama"
+else
+  warn "Local fallback backend was not fully provisioned"
+fi
 step_done
 
 # Step 4: device-agent
@@ -327,7 +569,7 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
   fi
   upsert_env "$AGENT_ENV" "DEVICE_ID" "$DEVICE_ID"
 
-  # Ask for bootstrap secret if not already configured
+  # Prompt for bootstrap secret
   if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
     echo ""
     echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
@@ -515,6 +757,7 @@ section_box "Services Running" "$GREEN"
 echo ""
 result_line "ai-runtime:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8000"
 result_line "Model:" "${SELECTED_MODEL}"
+result_line "Local fallback:" "Ollama on 127.0.0.1:11434"
 result_line "device-agent:" "Heartbeat → gateway every 60s"
 result_line "Face UI:" "fullscreen kiosk (Chromium)"
 result_line "Voice pipeline:" "mic → VAD → local chat"
@@ -548,7 +791,7 @@ result_line "Runtime config:" "/opt/ai-runtime/.env"
 result_line "Agent config:" "/opt/device-agent/.env"
 echo ""
 info "Key settings in /opt/ai-runtime/.env:"
-echo "       ${DIM}LOCAL_BACKEND=llamacpp${RST}       ${DIM}# or ollama${RST}"
+echo "       ${DIM}LOCAL_BACKEND=ollama${RST}"
 echo "       ${DIM}LOCAL_MODEL=${SELECTED_MODEL}${RST}"
 echo "       ${DIM}GATEWAY_FIRST=true${RST}          ${DIM}# try gateway first, local as backup${RST}"
 echo ""
@@ -559,6 +802,7 @@ echo "  ${DIM}Test chat     ${RST} curl -s http://127.0.0.1:8000/v1/chat -H 'Con
 echo "  ${DIM}Runtime logs  ${RST} sudo journalctl -u ai-runtime -n 100 -f"
 echo "  ${DIM}Agent logs    ${RST} sudo journalctl -u device-agent -n 100 -f"
 echo "  ${DIM}Voice logs    ${RST} sudo journalctl -u vritti-voice -n 100 -f"
+echo "  ${DIM}Ollama logs   ${RST} sudo journalctl -u ollama -n 100 -f"
 echo "  ${DIM}Restart       ${RST} sudo systemctl restart ai-runtime device-agent vritti-voice"
 echo "  ${DIM}Status        ${RST} sudo systemctl status ai-runtime device-agent vritti-voice"
 echo ""

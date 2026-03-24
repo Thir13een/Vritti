@@ -28,9 +28,9 @@ The Pi is a **thin client** — it captures your voice and plays back audio. All
 ```
   🎤 You speak
      ↓
-  🟠 [Pi] Mic → Silero VAD (neural speech detection)
+  🟠 [Pi] Mic → Silero VAD + streaming voice relay
      ↓
-  🧠 [Pi / Cloud] AI Chat (local Qwen or gateway)
+  🧠 [Cloud] Streaming STT → fast LLM → streaming TTS
      ↓
   🪷 Mandala face animates throughout
 ```
@@ -44,6 +44,7 @@ The Pi is a **thin client** — it captures your voice and plays back audio. All
 | 🗣️ | **Multilingual** | 10+ Indian languages, auto-detects and responds in your language |
 | 🧠 | **Neural VAD** | Silero voice activity detection (~2MB), no false triggers |
 | 📡 | **Thin client** | No API keys on device, no GPU needed on Pi |
+| 🧯 | **Gateway fallback** | Gateway-first with local Ollama fallback on the Pi |
 | 🪷 | **Mandala face** | Living animated display reacts to conversation state |
 | ⚡ | **One-command install** | Interactive installer with model selection |
 | 🔄 | **Auto-start** | systemd services — boots ready to talk |
@@ -75,7 +76,7 @@ cd Vritti
 sudo bash pi/installer/install.sh
 ```
 
-> 💡 The installer will guide you through model selection, dependency install, and gateway registration.
+> 💡 The installer will guide you through model selection, dependency install, Ollama local fallback setup, and gateway registration.
 
 ### 3️⃣ Connect to gateway
 
@@ -113,7 +114,7 @@ pi/
 | Service | Description |
 |---------|-------------|
 | 🧠 `ai-runtime` | Local API server (port 8000), serves face UI, exposes voice state |
-| 🎤 `vritti-voice` | Voice pipeline — mic → VAD → local chat |
+| 🎤 `vritti-voice` | Voice pipeline — mic → VAD → shared state + local diagnostics |
 | 🪷 `vritti-kiosk` | Fullscreen Chromium kiosk showing mandala face |
 | 📡 `device-agent` | Heartbeat to gateway every 60s |
 
@@ -146,11 +147,28 @@ Runtime config: `/opt/ai-runtime/.env`
 | Variable | Description |
 |----------|-------------|
 | `GATEWAY_URL` | Gateway chat endpoint |
+| `GATEWAY_VOICE_WS_URL` | Gateway streaming voice WebSocket endpoint |
 | `GATEWAY_DEVICE_TOKEN` | Auth token (auto-issued on registration) |
 | `DEVICE_ID` | Pi identifier (defaults to hostname) |
-| `LOCAL_MODEL` | Ollama model (`qwen3.5:0.8b` or `qwen3.5:2b`) |
-| `LOCAL_BACKEND` | `ollama` or `llamacpp` |
+| `LOCAL_MODEL` | Ollama fallback model (`qwen3.5:0.8b` or `qwen3.5:2b`) |
+| `LOCAL_BACKEND` | Local backend, defaults to `ollama` |
 | `VAD_THRESHOLD` | Speech detection sensitivity (default: `0.5`) |
+| `VOICE_STREAM_FRAME_MS` | Browser voice stream chunk size for gateway relay |
+| `VRITTI_FACE_UI_SOURCE` | Set to `github` to serve the face UI from GitHub raw (cached on startup) instead of `/opt/face-ui` |
+| `VRITTI_FACE_UI_GITHUB_URL` | Optional raw URL to `index.html` (default: `Thir13een/Vritti` main `pi/face-ui/index.html`) |
+
+---
+
+## Voice Streaming
+
+The Pi UI now prefers a local WebSocket relay at `ws://127.0.0.1:8000/v1/voice/ws` and falls back to the older batch `/v1/voice-proxy` path if the gateway voice WebSocket is unavailable.
+
+For the low-latency path, your gateway must expose a streaming voice endpoint compatible with `GATEWAY_VOICE_WS_URL`.
+
+Recommended voice model split:
+
+- Voice / talk mode: `Sarvam 30B`
+- Build / deep reasoning mode: `Sarvam 105B`
 
 ---
 
@@ -160,7 +178,7 @@ Runtime config: `/opt/ai-runtime/.env`
 |-------|-----------|
 | 🎤 Voice detection | Silero VAD (PyTorch, ~2MB) |
 | 💬 Chat AI | Sarvam AI / OpenRouter (gateway) or local Qwen |
-| 🧠 Local model | Qwen 3.5 (0.8B / 2B via Ollama) |
+| 🧠 Local model | Qwen 3.5 (0.8B / 2B via Ollama fallback) |
 | 🖥️ Pi server | FastAPI + Uvicorn |
 | 🪷 Face display | HTML5 Canvas mandala animation |
 | ⚙️ Process manager | systemd |
