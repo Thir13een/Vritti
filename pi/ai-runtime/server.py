@@ -73,6 +73,7 @@ async def security_headers(request: Request, call_next):
 
 class ChatRequest(BaseModel):
     prompt: str = Field(..., max_length=50_000)
+    conversation_id: str = Field("", max_length=120)
 
 
 VALID_MODES = ("fast", "deep")
@@ -311,13 +312,14 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
         token = (authorization or "").removeprefix("Bearer ").strip()
         if not token or not hmac.compare_digest(token, CHAT_TOKEN):
             raise HTTPException(status_code=401, detail="invalid or missing token")
-    return generate(cfg, req.prompt.strip())
+    return generate(cfg, req.prompt.strip(), conversation_id=req.conversation_id.strip())
 
 
 @app.post("/v1/voice-proxy")
 async def voice_proxy(
     file: UploadFile = File(...),
     x_voice_mode: str | None = Header(default=None),
+    x_conversation_id: str | None = Header(default=None),
 ):
     """Proxy audio to gateway /v1/voice and stream NDJSON back."""
     if not cfg.gateway_base or not cfg.gateway_device_token:
@@ -340,6 +342,7 @@ async def voice_proxy(
             "Authorization": f"Bearer {cfg.gateway_device_token}",
             "x-device-id": cfg.device_id or "browser-test",
             "x-voice-mode": x_voice_mode or "fast",
+            "x-conversation-id": (x_conversation_id or "").strip() or (cfg.device_id or "browser-default"),
             "User-Agent": "Vritti-Pi/1.0",
         },
         method="POST",

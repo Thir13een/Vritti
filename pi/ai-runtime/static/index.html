@@ -362,7 +362,26 @@
     const sendBtn = document.getElementById('send');
     const statusEl = document.getElementById('status');
     const statusDot = document.getElementById('statusDot');
+    const CONVERSATION_KEY = 'vritti-conversation-id';
     let welcomeShown = true;
+
+    function createConversationId() {
+      return 'browser-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+    }
+
+    function getConversationId() {
+      try {
+        const existing = localStorage.getItem(CONVERSATION_KEY);
+        if (existing) return existing;
+        const created = createConversationId();
+        localStorage.setItem(CONVERSATION_KEY, created);
+        return created;
+      } catch {
+        return createConversationId();
+      }
+    }
+
+    const conversationId = getConversationId();
 
     function setStatus(s) { statusEl.textContent = s; }
 
@@ -425,7 +444,7 @@
         const res = await fetch('/v1/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ prompt, conversation_id: conversationId }),
         });
         hideTyping();
         const data = await res.json().catch(() => ({}));

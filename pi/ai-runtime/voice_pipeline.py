@@ -44,6 +44,7 @@ GATEWAY_HEALTH_RETRIES = max(1, int(os.getenv("GATEWAY_HEALTH_RETRIES", "10")))
 GATEWAY_BASE = os.getenv("GATEWAY_URL", "http://127.0.0.1:9000/v1/chat").strip().replace("/v1/chat", "")
 GATEWAY_TOKEN = os.getenv("GATEWAY_DEVICE_TOKEN", "").strip()
 DEVICE_ID = os.getenv("DEVICE_ID", "").strip()
+VOICE_CONVERSATION_ID = os.getenv("VOICE_CONVERSATION_ID", "").strip() or ((DEVICE_ID or "device") + "-voice")
 STATE_DIR = Path(
     os.getenv(
         "VRITTI_SHARED_STATE_DIR",
@@ -335,6 +336,7 @@ def voice_roundtrip(wav_bytes: bytes):
             "Authorization": f"Bearer {GATEWAY_TOKEN}",
             "x-device-id": DEVICE_ID,
             "x-voice-mode": _get_voice_mode(),
+            "x-conversation-id": VOICE_CONVERSATION_ID,
         },
     )
 

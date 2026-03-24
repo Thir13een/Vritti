@@ -498,6 +498,7 @@ const micWrap = document.getElementById('micWrap');
 const micLevelArc = document.getElementById('micLevelArc');
 const TAU = Math.PI * 2;
 const RING_LEN = 2 * Math.PI * 68;
+const CONVERSATION_KEY = 'vritti-conversation-id';
 
 const STATUS_COPY = {
   idle: {
@@ -597,6 +598,20 @@ function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + Ma
 function mix(a, b, n) { return [lerp(a[0], b[0], n), lerp(a[1], b[1], n), lerp(a[2], b[2], n)]; }
 function pal() { return LOTUS_PALETTES[state] || LOTUS_PALETTES.idle; }
 function dayPal() { return DAYPARTS[dayPart] || DAYPARTS.afternoon; }
+function createConversationId() { return 'kiosk-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36); }
+function getConversationId() {
+  try {
+    const existing = localStorage.getItem(CONVERSATION_KEY);
+    if (existing) return existing;
+    const created = createConversationId();
+    localStorage.setItem(CONVERSATION_KEY, created);
+    return created;
+  } catch {
+    return createConversationId();
+  }
+}
+
+const conversationId = getConversationId();
 
 function getDayPartForHour(hour) {
   if (hour >= 5 && hour < 12) return 'morning';
@@ -1219,7 +1234,7 @@ function connectVoiceSocket() {
     ws.onopen = function () {
       settled = true;
       voiceSocket = ws;
-      ws.send(JSON.stringify({ type: 'session_start', mode: currentMode || 'fast' }));
+      ws.send(JSON.stringify({ type: 'session_start', mode: currentMode || 'fast', conversation_id: conversationId }));
       resolve(ws);
     };
     ws.onmessage = function (e) {
@@ -1256,7 +1271,7 @@ async function sendAudioToGateway(blob) {
     form.append('file', blob, 'audio.webm');
     const resp = await fetch('/v1/voice-proxy', {
       method: 'POST',
-      headers: { 'x-voice-mode': currentMode || 'fast' },
+      headers: { 'x-voice-mode': currentMode || 'fast', 'x-conversation-id': conversationId },
       body: form,
     });
     if (!resp.ok) {

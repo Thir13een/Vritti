@@ -108,7 +108,7 @@ def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
     raise RuntimeError("all local backends failed: " + " | ".join(errors))
 
 
-def gateway_chat(cfg: RuntimeConfig, prompt: str) -> str:
+def gateway_chat(cfg: RuntimeConfig, prompt: str, conversation_id: str = "") -> str:
     headers = {"Content-Type": "application/json"}
     if cfg.gateway_device_token:
         headers["Authorization"] = f"Bearer {cfg.gateway_device_token}"
@@ -116,11 +116,13 @@ def gateway_chat(cfg: RuntimeConfig, prompt: str) -> str:
         headers["x-device-id"] = cfg.device_id
 
     payload = {"prompt": prompt}
+    if conversation_id:
+        payload["conversation_id"] = conversation_id
     data = _post_json(cfg.gateway_url, payload, headers, timeout_seconds=cfg.gateway_timeout_seconds)
     return str(data.get("answer", "")).strip()
 
 
-def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
+def generate(cfg: RuntimeConfig, prompt: str, conversation_id: str = "") -> dict[str, Any]:
     prompt_preview = prompt[:160].replace("\n", " ")
     logger.info("generate called", extra={"prompt_preview": prompt_preview})
 
@@ -131,7 +133,7 @@ def generate(cfg: RuntimeConfig, prompt: str) -> dict[str, Any]:
 
     if cfg.gateway_first and gateway_configured:
         try:
-            answer = gateway_chat(cfg, prompt)
+            answer = gateway_chat(cfg, prompt, conversation_id=conversation_id)
             if answer:
                 logger.info("serving gateway response", extra={"api_polished": True})
                 return {

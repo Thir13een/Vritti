@@ -43,6 +43,7 @@ def _iter_gateway_voice_events(
     audio_bytes: bytes,
     mime_type: str,
     mode: str,
+    conversation_id: str,
 ) -> Iterable[dict[str, Any]]:
     boundary = f"vritti-{int(time.time() * 1000)}"
     filename = "audio.wav" if "wav" in mime_type else "audio.webm"
@@ -60,6 +61,7 @@ def _iter_gateway_voice_events(
             "Authorization": f"Bearer {cfg.gateway_device_token}",
             "x-device-id": cfg.device_id or "browser-test",
             "x-voice-mode": mode or "fast",
+            "x-conversation-id": conversation_id or (cfg.device_id or "browser-default"),
             "User-Agent": "Vritti-Pi/1.0",
         },
         method="POST",
@@ -99,6 +101,7 @@ async def _stream_gateway_to_client(
     audio_bytes: bytes,
     mime_type: str,
     mode: str,
+    conversation_id: str,
 ) -> None:
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
@@ -106,7 +109,7 @@ async def _stream_gateway_to_client(
     def worker() -> None:
         saw_done = False
         try:
-            for msg in _iter_gateway_voice_events(cfg, audio_bytes, mime_type, mode):
+            for msg in _iter_gateway_voice_events(cfg, audio_bytes, mime_type, mode, conversation_id):
                 if msg.get("type") in {"done", "assistant_done"}:
                     saw_done = True
                 loop.call_soon_threadsafe(queue.put_nowait, ("msg", msg))
@@ -137,6 +140,7 @@ async def relay_voice_session(client_ws: WebSocket, cfg: RuntimeConfig, state_di
         return
 
     mode = "fast"
+    conversation_id = cfg.device_id or "browser-default"
     chunk_bytes: list[bytes] = []
     chunk_format = "webm"
     chunk_mime = "audio/webm"
@@ -166,8 +170,11 @@ async def relay_voice_session(client_ws: WebSocket, cfg: RuntimeConfig, state_di
         if event_type == "session_start":
             requested_mode = str(payload.get("mode") or mode).strip().lower()
             mode = requested_mode if requested_mode in {"fast", "deep"} else "fast"
+            requested_conversation_id = str(payload.get("conversation_id") or "").strip()
+            if requested_conversation_id:
+                conversation_id = requested_conversation_id
             _write_session_status(state_dir, "connected", mode=mode, transport="runtime_ws_http_bridge")
-            await client_ws.send_json({"type": "session_ready", "mode": mode})
+            await client_ws.send_json({"type": "session_ready", "mode": mode, "conversation_id": conversation_id})
             continue
 
         if event_type == "speech_started":
@@ -224,7 +231,7 @@ async def relay_voice_session(client_ws: WebSocket, cfg: RuntimeConfig, state_di
 
         _write_session_status(state_dir, "thinking", mode=mode, audio_bytes=len(outbound_bytes))
         try:
-            await _stream_gateway_to_client(client_ws, cfg, outbound_bytes, outbound_mime, mode)
+            await _stream_gateway_to_client(client_ws, cfg, outbound_bytes, outbound_mime, mode, conversation_id)
             _write_session_status(state_dir, "idle", mode=mode)
         except Exception as exc:
             _write_session_status(state_dir, "error", reason=str(exc))
