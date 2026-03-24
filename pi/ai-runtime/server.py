@@ -219,6 +219,18 @@ def _probe_gateway() -> bool | None:
         return False
 
 
+def _voice_optional_for_browser_kiosk(voice: dict[str, object], gateway_ok: bool | None) -> bool:
+    if gateway_ok is not True:
+        return False
+    mic_state = str(voice.get("mic", "")).strip().lower()
+    reason = str(voice.get("reason", "")).strip().lower()
+    return (
+        mic_state in {"retrying", "unavailable", "stopped"}
+        or "microphone unavailable" in reason
+        or "invalid input device" in reason
+    )
+
+
 @app.get("/v1/state")
 def get_state() -> dict:
     """Current face state from voice pipeline."""
@@ -297,7 +309,15 @@ def health() -> dict:
     result.update(voice_health)
     result.update(_read_voice_session())
 
-    voice_status = str((voice_health.get("voice") or {}).get("status", "unknown"))
+    voice = dict(voice_health.get("voice") or {})
+    voice_status = str(voice.get("status", "unknown"))
+    if voice and _voice_optional_for_browser_kiosk(voice, gateway_ok):
+        voice["scope"] = "local_pipeline"
+        voice["optional_for_browser_kiosk"] = True
+        result["voice"] = voice
+        if result["status"] == "error":
+            result["status"] = "degraded"
+        return result
     if voice_status in {"error", "unknown"}:
         result["status"] = "error"
     elif voice_status == "degraded" and result["status"] == "ok":
