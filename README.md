@@ -190,7 +190,10 @@ Pi starts install
 Pi sends access request
    │
    ▼
-Gateway shows device as PENDING
+Gateway shows device as PENDING with a pairing code
+   │
+   ▼
+You verify the code on the physical Pi
    │
    ▼
 You approve it in dashboard
@@ -200,6 +203,7 @@ Pi receives real device token
 ```
 
 If the gateway is configured, the installer waits for approval for up to 5 minutes.
+The installer also shows the pairing code so you can match it against the dashboard before approving.
 
 ---
 

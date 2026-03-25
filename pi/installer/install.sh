@@ -731,6 +731,8 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
     REG_STATE="$(json_field "$REG_RESPONSE" status)"
     REG_TOKEN="$(json_field "$REG_RESPONSE" device_token)"
     REG_DETAIL="$(json_field "$REG_RESPONSE" detail)"
+    REG_PAIRING_CODE="$(json_field "$REG_RESPONSE" pairing_code)"
+    REG_EXPIRES_AT="$(json_field "$REG_RESPONSE" expires_at)"
 
     if [[ "${REG_STATE}" == "approved" && -n "${REG_TOKEN}" ]]; then
       TOKEN="${REG_TOKEN}"
@@ -741,6 +743,23 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
       TOKEN_SOURCE="pending_approval"
       warn "Gateway access request is pending admin approval"
       info "${REG_DETAIL:-Approve this Pi from the gateway dashboard to continue}"
+      if [[ -n "${REG_PAIRING_CODE}" ]]; then
+        echo ""
+        echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}Verify This Pi In Dashboard${RST}                              ${BOLD}${SAFFRON}│${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}Device ID:${RST} ${BOLD}${WHITE}${DEVICE_ID}${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}Pairing code:${RST} ${BOLD}${GREEN}${REG_PAIRING_CODE}${RST}"
+        if [[ -n "${REG_EXPIRES_AT}" ]]; then
+          echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}Expires:${RST} ${DIM}${REG_EXPIRES_AT}${RST}"
+        fi
+        echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}   ${YELLOW}Approve only if this code matches the dashboard.${RST} ${BOLD}${SAFFRON}│${RST}"
+        echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+        echo "  ${BOLD}${SAFFRON}╰─────────────────────────────────────────────────────────────╯${RST}"
+        echo ""
+      fi
       info "Polling for approval for up to 5 minutes"
       for _attempt in $(seq 1 60); do
         sleep 5
@@ -748,6 +767,8 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
         REG_STATE="$(json_field "$REG_RESPONSE" status)"
         REG_TOKEN="$(json_field "$REG_RESPONSE" device_token)"
         REG_DETAIL="$(json_field "$REG_RESPONSE" detail)"
+        REG_PAIRING_CODE="$(json_field "$REG_RESPONSE" pairing_code)"
+        REG_EXPIRES_AT="$(json_field "$REG_RESPONSE" expires_at)"
         if [[ "${REG_STATE}" == "approved" && -n "${REG_TOKEN}" ]]; then
           TOKEN="${REG_TOKEN}"
           TOKEN_SOURCE="gateway"
