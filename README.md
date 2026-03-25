@@ -140,17 +140,10 @@ You can still run without a display, but the face UI is part of the intended pro
 
 Install Raspberry Pi OS, boot the Pi, and connect it to the internet.
 
-### 2. Clone the repo
+### 2. Run the one-line installer
 
 ```bash
-git clone https://github.com/Thir13een/Vritti.git
-cd Vritti
-```
-
-### 3. Run the installer
-
-```bash
-sudo bash pi/installer/install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/Thir13een/Vritti/main/install-pi.sh)
 ```
 
 The installer does these things:
@@ -161,6 +154,21 @@ The installer does these things:
 - sets up `systemd` services
 - asks which local model mode you want
 - requests gateway access for the Pi
+
+You do not need to manually enter:
+- device token
+- bootstrap secret
+- device id in most cases
+
+### 3. Developer / repo path
+
+If you already cloned the repo and want to run the installer from source:
+
+```bash
+git clone https://github.com/Thir13een/Vritti.git
+cd Vritti
+sudo bash install-pi.sh
+```
 
 ### 4. Choose Pi model mode
 
@@ -204,6 +212,7 @@ Pi receives real device token
 
 If the gateway is configured, the installer waits for approval for up to 5 minutes.
 The installer also shows the pairing code so you can match it against the dashboard before approving.
+After approval, the token is saved automatically on the Pi.
 
 ---
 
