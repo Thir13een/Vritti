@@ -369,10 +369,14 @@ register_with_gateway() {
   python3 - "$register_url" "$bootstrap_secret" "$device_id" <<'PY'
 import json, sys, urllib.error, urllib.request
 register_url, bootstrap_secret, device_id = sys.argv[1], sys.argv[2], sys.argv[3]
+headers = {"Content-Type": "application/json"}
+bootstrap_secret = bootstrap_secret.strip()
+if bootstrap_secret and bootstrap_secret != "replace_with_bootstrap_secret":
+    headers["x-bootstrap-secret"] = bootstrap_secret
 req = urllib.request.Request(
     register_url,
     data=json.dumps({"device_id": device_id}).encode("utf-8"),
-    headers={"Content-Type": "application/json", "x-bootstrap-secret": bootstrap_secret},
+    headers=headers,
     method="POST",
 )
 try:
@@ -719,34 +723,7 @@ TOKEN_SOURCE="existing"
 if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
   REGISTER_URL="$(get_env "$RUNTIME_ENV" "GATEWAY_REGISTER_URL" || true)"
   BOOTSTRAP_SECRET="$(get_env "$RUNTIME_ENV" "GATEWAY_BOOTSTRAP_SECRET" || true)"
-
-  # Prompt for bootstrap secret
-  if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
-    echo ""
-    echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}Device Registration${RST}                                       ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}To register this Pi, you need the device secret${RST}         ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${CREAM}from your gateway dashboard or server .env file.${RST}        ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Find it at: dashboard → Settings → Device Secret${RST}        ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${DIM}Or in: gateway server .env → DEVICE_REGISTER_SECRET${RST}     ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}   ${YELLOW}Press Enter to skip (gateway will be disabled)${RST}         ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
-    echo "  ${BOLD}${SAFFRON}╰─────────────────────────────────────────────────────────────╯${RST}"
-    echo ""
-    printf "  ${SAFFRON}  ►  ${RST}${WHITE}Paste device secret: ${RST}"
-    read -r BOOTSTRAP_SECRET </dev/tty
-    BOOTSTRAP_SECRET="${BOOTSTRAP_SECRET// /}"
-    if [[ -n "${BOOTSTRAP_SECRET}" ]]; then
-      upsert_env "$RUNTIME_ENV" "GATEWAY_BOOTSTRAP_SECRET" "$BOOTSTRAP_SECRET"
-      ok "Device secret saved"
-    fi
-  fi
-
-  if [[ -n "${REGISTER_URL}" && -n "${BOOTSTRAP_SECRET}" && "${BOOTSTRAP_SECRET}" != "replace_with_bootstrap_secret" ]]; then
+  if [[ -n "${REGISTER_URL}" ]]; then
     doing "Requesting device access from gateway"
     info "Register URL: ${REGISTER_URL}"
     info "Device ID: ${DEVICE_ID}"
@@ -800,11 +777,7 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
       TOKEN_SOURCE="registration_failed"
     fi
   else
-    if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
-      info "No device secret provided — skipping gateway registration"
-    else
-      info "No GATEWAY_REGISTER_URL configured"
-    fi
+    info "No GATEWAY_REGISTER_URL configured"
     TOKEN="replace_with_device_token"
     TOKEN_SOURCE="not_configured"
   fi
@@ -999,9 +972,8 @@ if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
   cmd "Edit /opt/ai-runtime/.env:"
   echo "       ${DIM}GATEWAY_URL=http://<server-ip>:9000/v1/chat${RST}"
   echo "       ${DIM}GATEWAY_REGISTER_URL=http://<server-ip>:9000/v1/device/register${RST}"
-  echo "       ${DIM}GATEWAY_BOOTSTRAP_SECRET=<DEVICE_REGISTER_SECRET from server .env>${RST}"
   echo ""
-  cmd "Then re-run this installer:"
+  cmd "Then approve this device from the gateway dashboard and re-run the installer:"
   cmd "sudo bash pi/installer/install.sh"
   echo ""
 fi

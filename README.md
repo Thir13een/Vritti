@@ -217,9 +217,15 @@ Typical values:
 GATEWAY_URL=https://vritti.dev/v1/chat
 GATEWAY_VOICE_WS_URL=wss://vritti.dev/v1/voice/ws
 GATEWAY_REGISTER_URL=https://vritti.dev/v1/device/register
-GATEWAY_BOOTSTRAP_SECRET=<secret from gateway>
 GATEWAY_DEVICE_TOKEN=<auto-issued after approval>
 DEVICE_ID=<hostname or custom id>
+```
+
+Optional:
+
+```env
+# trusted bootstrap hint, not required for normal onboarding
+# GATEWAY_BOOTSTRAP_SECRET=<optional secret>
 ```
 
 Heartbeat config lives at:
