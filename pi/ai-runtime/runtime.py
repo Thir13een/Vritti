@@ -70,6 +70,11 @@ def _chat_with_ollama(cfg: RuntimeConfig, messages: list[dict[str, str]]) -> str
 
 
 def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
+    if cfg.local_backend == "none":
+        raise RuntimeError("local backend disabled")
+    if not cfg.local_model:
+        raise RuntimeError("local model not configured")
+
     system_text = (
         "You are Vritti, a concise backup AI assistant. "
         "Be warm and conversational. Reply in the same language the user writes in."

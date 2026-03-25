@@ -76,7 +76,7 @@ cd Vritti
 sudo bash pi/installer/install.sh
 ```
 
-> 💡 The installer will guide you through model selection, dependency install, Ollama local fallback setup, and gateway registration.
+> 💡 The installer will guide you through model selection, dependency install, optional Ollama local fallback setup, and gateway registration.
 > It now fails the install if it cannot leave the Pi with at least one reachable chat backend: gateway or local Ollama.
 
 ### 3️⃣ Connect to gateway
@@ -151,8 +151,8 @@ Runtime config: `/opt/ai-runtime/.env`
 | `GATEWAY_VOICE_WS_URL` | Gateway streaming voice WebSocket endpoint |
 | `GATEWAY_DEVICE_TOKEN` | Auth token (auto-issued on registration) |
 | `DEVICE_ID` | Pi identifier (defaults to hostname) |
-| `LOCAL_MODEL` | Ollama fallback model (`qwen3.5:0.8b` or `qwen3.5:2b`) |
-| `LOCAL_BACKEND` | Local backend, defaults to `ollama` on Pi installs |
+| `LOCAL_MODEL` | Local Ollama model (`qwen3.5:0.8b` / `qwen3.5:2b`) or blank for gateway-only installs |
+| `LOCAL_BACKEND` | `ollama` or `none` on Pi installs |
 | `VAD_THRESHOLD` | Speech detection sensitivity (default: `0.5`) |
 | `VOICE_STREAM_FRAME_MS` | Browser voice stream chunk size for gateway relay |
 | `VRITTI_FACE_UI_SOURCE` | Set to `github` to serve the face UI from GitHub raw (cached on startup) instead of `/opt/face-ui` |
@@ -179,7 +179,7 @@ Recommended voice model split:
 |-------|-----------|
 | 🎤 Voice detection | Silero VAD (PyTorch, ~2MB) |
 | 💬 Chat AI | Sarvam AI / OpenRouter (gateway) or local Qwen |
-| 🧠 Local model | Qwen 3.5 (0.8B / 2B via Ollama fallback) |
+| 🧠 Local model | Optional Qwen 3.5 (0.8B / 2B via Ollama) or gateway-only mode |
 | 🖥️ Pi server | FastAPI + Uvicorn |
 | 🪷 Face display | HTML5 Canvas mandala animation |
 | ⚙️ Process manager | systemd |

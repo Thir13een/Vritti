@@ -48,7 +48,7 @@ class RuntimeConfig:
                 gateway_voice_ws_url = "ws://" + http_base[len("http://"):] + "/v1/voice/ws"
 
         return RuntimeConfig(
-            local_backend=os.getenv("LOCAL_BACKEND", "ollama").strip().lower(),
+            local_backend=os.getenv("LOCAL_BACKEND", "ollama").strip().lower() or "ollama",
             local_model=os.getenv("LOCAL_MODEL", "qwen3.5:2b").strip(),
             ollama_base=os.getenv("OLLAMA_BASE", "http://127.0.0.1:11434").strip(),
             llamacpp_base=os.getenv("LLAMACPP_BASE", "http://127.0.0.1:8080").strip(),

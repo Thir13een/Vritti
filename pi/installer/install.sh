@@ -439,6 +439,12 @@ info "Select model for your Pi's hardware."
 echo ""
 echo "  ${BOLD}${SAFFRON}╭─────────────────────────────────────────────────────────────╮${RST}"
 echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}[0]  no local model${RST}  ${DIM}(gateway only, no Pi model download)${RST}   ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Best when gateway will always be available${RST}           ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Fastest install, no model storage usage${RST}             ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}        ${YELLOW}⚠${RST} ${CREAM}No on-device chat fallback if gateway is down${RST}      ${BOLD}${SAFFRON}│${RST}"
+echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
 echo "  ${BOLD}${SAFFRON}│${RST}   ${BOLD}${WHITE}[1]  qwen3.5:0.8b${RST}   ${DIM}(1.0 GB download)${RST}                     ${BOLD}${SAFFRON}│${RST}"
 echo "  ${BOLD}${SAFFRON}│${RST}                                                             ${BOLD}${SAFFRON}│${RST}"
 echo "  ${BOLD}${SAFFRON}│${RST}        ${GREEN}✓${RST} ${CREAM}Runs on Pi Zero 2W, Pi 3, Pi 4 (1 GB+)${RST}          ${BOLD}${SAFFRON}│${RST}"
@@ -468,22 +474,28 @@ fi
 echo ""
 
 while true; do
-  printf "  ${SAFFRON}  ►  ${RST}${WHITE}Enter choice ${BOLD}[1]${RST}${WHITE} or ${BOLD}[2]${RST}${WHITE} (default: ${BOLD}${SUGGESTED}${RST}${WHITE}): ${RST}"
+  printf "  ${SAFFRON}  ►  ${RST}${WHITE}Enter choice ${BOLD}[0]${RST}${WHITE}, ${BOLD}[1]${RST}${WHITE}, or ${BOLD}[2]${RST}${WHITE} (default: ${BOLD}${SUGGESTED}${RST}${WHITE}): ${RST}"
   read -r MODEL_CHOICE </dev/tty
   MODEL_CHOICE="${MODEL_CHOICE:-$SUGGESTED}"
   case "$MODEL_CHOICE" in
+    0) SELECTED_MODEL=""; LOCAL_MODEL_LABEL="none (gateway only)"; break ;;
     1) SELECTED_MODEL="qwen3.5:0.8b"; break ;;
     2) SELECTED_MODEL="qwen3.5:2b";   break ;;
-    *) warn "Please enter 1 or 2" ;;
+    *) warn "Please enter 0, 1, or 2" ;;
   esac
 done
 
-ok "Model selected" "${SELECTED_MODEL}"
+LOCAL_MODEL_LABEL="${LOCAL_MODEL_LABEL:-$SELECTED_MODEL}"
+ok "Model selected" "${LOCAL_MODEL_LABEL}"
 step_done
 
 # Step 3: ai-runtime
 step_header 3 "Installing ai-runtime"
-info "Core AI service running ${BOLD}${WHITE}${SELECTED_MODEL}${RST}${CREAM} on port 8000."
+if [[ -n "${SELECTED_MODEL}" ]]; then
+  info "Core AI service running ${BOLD}${WHITE}${SELECTED_MODEL}${RST}${CREAM} on port 8000."
+else
+  info "Core AI service running in ${BOLD}${WHITE}gateway-only${RST}${CREAM} mode on port 8000."
+fi
 echo ""
 
 doing "Creating /opt/ai-runtime"
@@ -588,22 +600,29 @@ chown "${PI_USER}:${PI_USER}" "$RUNTIME_ENV"
 chmod 600 "$RUNTIME_ENV"
 ok "Runtime .env secured" "owner-only read/write (600)"
 
-doing "Setting model to ${SELECTED_MODEL}"
-upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
-ok "Model configured" "LOCAL_MODEL=${SELECTED_MODEL}"
-
 LOCAL_FALLBACK_READY=0
-doing "Setting supported local backend to Ollama"
-upsert_env "$RUNTIME_ENV" "LOCAL_BACKEND" "ollama"
-upsert_env "$RUNTIME_ENV" "OLLAMA_BASE" "http://127.0.0.1:11434"
-ok "Local backend target configured" "backend: ollama"
+if [[ -n "${SELECTED_MODEL}" ]]; then
+  doing "Setting model to ${SELECTED_MODEL}"
+  upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
+  ok "Model configured" "LOCAL_MODEL=${SELECTED_MODEL}"
 
-doing "Provisioning local fallback backend"
-if install_ollama_backend "$SELECTED_MODEL"; then
-  LOCAL_FALLBACK_READY=1
-  ok "Local fallback configured" "backend: ollama"
+  doing "Setting supported local backend to Ollama"
+  upsert_env "$RUNTIME_ENV" "LOCAL_BACKEND" "ollama"
+  upsert_env "$RUNTIME_ENV" "OLLAMA_BASE" "http://127.0.0.1:11434"
+  ok "Local backend target configured" "backend: ollama"
+
+  doing "Provisioning local fallback backend"
+  if install_ollama_backend "$SELECTED_MODEL"; then
+    LOCAL_FALLBACK_READY=1
+    ok "Local fallback configured" "backend: ollama"
+  else
+    warn "Local fallback backend was not fully provisioned"
+  fi
 else
-  warn "Local fallback backend was not fully provisioned"
+  doing "Disabling local model backend"
+  upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" ""
+  upsert_env "$RUNTIME_ENV" "LOCAL_BACKEND" "none"
+  ok "Local model disabled" "gateway-only install"
 fi
 
 doing "Finalizing runtime ownership"
@@ -884,8 +903,12 @@ echo "  ${RST}"
 section_box "Services Running" "$GREEN"
 echo ""
 result_line "ai-runtime:" "http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8000"
-result_line "Model:" "${SELECTED_MODEL}"
-result_line "Local fallback:" "Ollama on 127.0.0.1:11434"
+result_line "Model:" "${LOCAL_MODEL_LABEL}"
+if [[ -n "${SELECTED_MODEL}" ]]; then
+  result_line "Local fallback:" "Ollama on 127.0.0.1:11434"
+else
+  result_line "Local fallback:" "disabled"
+fi
 result_line "device-agent:" "Heartbeat → gateway every 60s"
 result_line "Face UI:" "fullscreen kiosk (Chromium)"
 result_line "Voice pipeline:" "mic → VAD → local chat"
@@ -919,9 +942,15 @@ result_line "Runtime config:" "/opt/ai-runtime/.env"
 result_line "Agent config:" "/opt/device-agent/.env"
 echo ""
 info "Key settings in /opt/ai-runtime/.env:"
-echo "       ${DIM}LOCAL_BACKEND=ollama${RST}"
-echo "       ${DIM}LOCAL_MODEL=${SELECTED_MODEL}${RST}"
-echo "       ${DIM}GATEWAY_FIRST=true${RST}          ${DIM}# try gateway first, local as backup${RST}"
+if [[ -n "${SELECTED_MODEL}" ]]; then
+  echo "       ${DIM}LOCAL_BACKEND=ollama${RST}"
+  echo "       ${DIM}LOCAL_MODEL=${SELECTED_MODEL}${RST}"
+  echo "       ${DIM}GATEWAY_FIRST=true${RST}          ${DIM}# try gateway first, local as backup${RST}"
+else
+  echo "       ${DIM}LOCAL_BACKEND=none${RST}"
+  echo "       ${DIM}LOCAL_MODEL=${RST}"
+  echo "       ${DIM}GATEWAY_FIRST=true${RST}          ${DIM}# gateway-only mode${RST}"
+fi
 echo ""
 
 section_box "Quick Reference" "$CYAN"
@@ -930,7 +959,9 @@ echo "  ${DIM}Test chat     ${RST} curl -s http://127.0.0.1:8000/v1/chat -H 'Con
 echo "  ${DIM}Runtime logs  ${RST} sudo journalctl -u ai-runtime -n 100 -f"
 echo "  ${DIM}Agent logs    ${RST} sudo journalctl -u device-agent -n 100 -f"
 echo "  ${DIM}Voice logs    ${RST} sudo journalctl -u vritti-voice -n 100 -f"
-echo "  ${DIM}Ollama logs   ${RST} sudo journalctl -u ollama -n 100 -f"
+if [[ -n "${SELECTED_MODEL}" ]]; then
+  echo "  ${DIM}Ollama logs   ${RST} sudo journalctl -u ollama -n 100 -f"
+fi
 echo "  ${DIM}Restart       ${RST} sudo systemctl restart ai-runtime device-agent vritti-voice"
 echo "  ${DIM}Status        ${RST} sudo systemctl status ai-runtime device-agent vritti-voice"
 echo ""

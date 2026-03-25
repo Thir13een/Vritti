@@ -196,6 +196,8 @@ def _probe_backend_url(url: str) -> bool:
 
 
 def _probe_local_backends() -> dict[str, bool]:
+    if cfg.local_backend == "none":
+        return {}
     probes = {
         "llamacpp": _probe_backend_url(f"{cfg.llamacpp_base}/health"),
         "ollama": _probe_backend_url(f"{cfg.ollama_base}/api/tags"),
@@ -280,22 +282,32 @@ def health() -> dict:
     local_probes = _probe_local_backends()
     local_ok = any(local_probes.values())
     gateway_ok = _probe_gateway()
-    primary_backend = cfg.local_backend if cfg.local_backend in local_probes else "ollama"
-    secondary_backend = "llamacpp" if primary_backend == "ollama" else "ollama"
-    result["local_backend"] = "reachable" if local_ok else "unreachable"
-    result["local_backend_primary"] = f"{primary_backend}:{'reachable' if local_probes.get(primary_backend) else 'unreachable'}"
-    result["local_backend_secondary"] = (
-        f"{secondary_backend}:{'reachable' if local_probes.get(secondary_backend) else 'unreachable'}"
-    )
+    if cfg.local_backend == "none":
+        result["local_backend"] = "disabled"
+        result["local_backend_primary"] = "none:disabled"
+        result["local_backend_secondary"] = "none:disabled"
+    else:
+        primary_backend = cfg.local_backend if cfg.local_backend in local_probes else "ollama"
+        secondary_backend = "llamacpp" if primary_backend == "ollama" else "ollama"
+        result["local_backend"] = "reachable" if local_ok else "unreachable"
+        result["local_backend_primary"] = (
+            f"{primary_backend}:{'reachable' if local_probes.get(primary_backend) else 'unreachable'}"
+        )
+        result["local_backend_secondary"] = (
+            f"{secondary_backend}:{'reachable' if local_probes.get(secondary_backend) else 'unreachable'}"
+        )
     if gateway_ok is not None:
         result["gateway"] = "reachable" if gateway_ok else "unreachable"
 
     if gateway_ok is None:
         result["backend"] = "reachable" if local_ok else "unreachable"
         if not local_ok:
-            result["status"] = "degraded"
+            result["status"] = "error"
     else:
-        result["fallback_backend"] = "reachable" if local_ok else "unreachable"
+        if cfg.local_backend == "none":
+            result["fallback_backend"] = "disabled"
+        else:
+            result["fallback_backend"] = "reachable" if local_ok else "unreachable"
         if gateway_ok:
             result["backend"] = "reachable"
         elif local_ok:
