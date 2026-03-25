@@ -280,8 +280,8 @@ def health() -> dict:
     local_probes = _probe_local_backends()
     local_ok = any(local_probes.values())
     gateway_ok = _probe_gateway()
-    primary_backend = cfg.local_backend if cfg.local_backend in local_probes else "llamacpp"
-    secondary_backend = "ollama" if primary_backend == "llamacpp" else "llamacpp"
+    primary_backend = cfg.local_backend if cfg.local_backend in local_probes else "ollama"
+    secondary_backend = "llamacpp" if primary_backend == "ollama" else "ollama"
     result["local_backend"] = "reachable" if local_ok else "unreachable"
     result["local_backend_primary"] = f"{primary_backend}:{'reachable' if local_probes.get(primary_backend) else 'unreachable'}"
     result["local_backend_secondary"] = (

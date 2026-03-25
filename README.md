@@ -77,6 +77,7 @@ sudo bash pi/installer/install.sh
 ```
 
 > 💡 The installer will guide you through model selection, dependency install, Ollama local fallback setup, and gateway registration.
+> It now fails the install if it cannot leave the Pi with at least one reachable chat backend: gateway or local Ollama.
 
 ### 3️⃣ Connect to gateway
 
@@ -151,7 +152,7 @@ Runtime config: `/opt/ai-runtime/.env`
 | `GATEWAY_DEVICE_TOKEN` | Auth token (auto-issued on registration) |
 | `DEVICE_ID` | Pi identifier (defaults to hostname) |
 | `LOCAL_MODEL` | Ollama fallback model (`qwen3.5:0.8b` or `qwen3.5:2b`) |
-| `LOCAL_BACKEND` | Local backend, defaults to `ollama` |
+| `LOCAL_BACKEND` | Local backend, defaults to `ollama` on Pi installs |
 | `VAD_THRESHOLD` | Speech detection sensitivity (default: `0.5`) |
 | `VOICE_STREAM_FRAME_MS` | Browser voice stream chunk size for gateway relay |
 | `VRITTI_FACE_UI_SOURCE` | Set to `github` to serve the face UI from GitHub raw (cached on startup) instead of `/opt/face-ui` |

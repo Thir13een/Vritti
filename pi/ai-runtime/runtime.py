@@ -84,8 +84,8 @@ def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
             return _chat_with_ollama(cfg, messages)
         raise RuntimeError(f"unsupported backend: {name}")
 
-    primary = "llamacpp"
-    secondary = "ollama"
+    primary = "ollama"
+    secondary = "llamacpp"
     if cfg.local_backend in ("llamacpp", "ollama"):
         primary = cfg.local_backend
         secondary = "ollama" if primary == "llamacpp" else "llamacpp"

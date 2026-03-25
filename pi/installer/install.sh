@@ -210,6 +210,34 @@ PY
   return 1
 }
 
+runtime_backend_status() {
+  local url="$1"
+  python3 - "$url" <<'PY'
+import json
+import sys
+import urllib.request
+
+url = sys.argv[1]
+with urllib.request.urlopen(url, timeout=5) as resp:
+    data = json.loads(resp.read().decode("utf-8"))
+
+backend = str(data.get("backend", "") or "").strip()
+gateway = str(data.get("gateway", "") or "n/a").strip()
+local_backend = str(data.get("local_backend", "") or "n/a").strip()
+primary = str(data.get("local_backend_primary", "") or "n/a").strip()
+secondary = str(data.get("local_backend_secondary", "") or "n/a").strip()
+status = str(data.get("status", "") or "unknown").strip()
+
+summary = (
+    f"status={status}, backend={backend}, gateway={gateway}, "
+    f"local={local_backend}, primary={primary}, secondary={secondary}"
+)
+if backend != "reachable":
+    raise SystemExit(summary)
+print(summary)
+PY
+}
+
 install_runtime_python_deps() {
   local base_requirements="/tmp/ai-runtime-requirements-no-torch.txt"
   grep -vE '^[[:space:]]*torch([[:space:]=<>!~].*)?$' /opt/ai-runtime/requirements.txt > "$base_requirements"
@@ -564,10 +592,15 @@ doing "Setting model to ${SELECTED_MODEL}"
 upsert_env "$RUNTIME_ENV" "LOCAL_MODEL" "$SELECTED_MODEL"
 ok "Model configured" "LOCAL_MODEL=${SELECTED_MODEL}"
 
+LOCAL_FALLBACK_READY=0
+doing "Setting supported local backend to Ollama"
+upsert_env "$RUNTIME_ENV" "LOCAL_BACKEND" "ollama"
+upsert_env "$RUNTIME_ENV" "OLLAMA_BASE" "http://127.0.0.1:11434"
+ok "Local backend target configured" "backend: ollama"
+
 doing "Provisioning local fallback backend"
 if install_ollama_backend "$SELECTED_MODEL"; then
-  upsert_env "$RUNTIME_ENV" "LOCAL_BACKEND" "ollama"
-  upsert_env "$RUNTIME_ENV" "OLLAMA_BASE" "http://127.0.0.1:11434"
+  LOCAL_FALLBACK_READY=1
   ok "Local fallback configured" "backend: ollama"
 else
   warn "Local fallback backend was not fully provisioned"
@@ -712,6 +745,14 @@ else
   upsert_env "$RUNTIME_ENV" "GATEWAY_FIRST" "true"
   ok "Gateway enabled" "GATEWAY_FIRST=true"
 fi
+
+if [[ "${TOKEN}" == "replace_with_device_token" && "${LOCAL_FALLBACK_READY}" -ne 1 ]]; then
+  fail "No usable backend available: gateway registration failed and local Ollama fallback is not ready"
+  echo ""
+  cmd "Check network access, available storage/RAM, and Ollama install logs"
+  cmd "sudo journalctl -u ollama -n 100 --no-pager"
+  exit 1
+fi
 step_done
 
 # Step 6: systemd
@@ -778,11 +819,23 @@ sleep 2
 if systemctl is-active --quiet ai-runtime; then
   if wait_for_http_ok "http://127.0.0.1:8000/health" 20 1; then
     ok "ai-runtime is running" "port 8000"
+    BACKEND_STATUS=""
+    if BACKEND_STATUS="$(runtime_backend_status "http://127.0.0.1:8000/health")"; then
+      ok "ai-runtime backend ready" "$BACKEND_STATUS"
+    else
+      fail "ai-runtime started, but no chat backend is reachable"
+      echo ""
+      cmd "Inspect runtime health:"
+      cmd "curl -s http://127.0.0.1:8000/health"
+      exit 1
+    fi
   else
-    warn "ai-runtime service is active, but /health did not become ready"
+    fail "ai-runtime service is active, but /health did not become ready"
+    exit 1
   fi
 else
-  warn "ai-runtime may not have started, check the logs below"
+  fail "ai-runtime did not start"
+  exit 1
 fi
 
 doing "Starting device-agent"
