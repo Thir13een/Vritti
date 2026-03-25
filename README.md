@@ -4,191 +4,442 @@
 
 <h1 align="center">🪷 Vritti</h1>
 <p align="center">
-  <strong>AI voice assistant for every Indian language</strong><br/>
-  <em>Runs on Raspberry Pi — listens, thinks, and speaks.</em>
+  <strong>Voice AI for every Indian language</strong><br/>
+  <em>Raspberry Pi on the edge. Gateway in the cloud. Fast voice in simple English.</em>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Raspberry%20Pi-c51a4a?style=for-the-badge&logo=raspberrypi&logoColor=white" alt="Raspberry Pi" />
-  <img src="https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+" />
+  <img src="https://img.shields.io/badge/runtime-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/voice-Silero%20VAD-ff6f00?style=for-the-badge" alt="Silero VAD" />
-
+  <img src="https://img.shields.io/badge/install-interactive-1f6feb?style=for-the-badge" alt="Interactive Install" />
 </p>
 
 ---
 
-## 🌟 What is Vritti?
+## 🌼 What Is Vritti?
 
-Vritti is an open-source voice assistant **built for India**. Plug a mic and speaker into a Raspberry Pi, run the installer, and you have a device that understands and responds in **your language**.
+Vritti is a voice product for Raspberry Pi devices.
 
-> 🗣️ Hindi · English · Tamil · Telugu · Bengali · Marathi · Gujarati · Kannada · Malayalam · Punjabi — and more
+The Pi does the local device work:
+- mic input
+- speaker playback
+- face UI
+- voice activity detection
+- kiosk mode
+- heartbeat to the gateway
 
-The Pi is a **thin client** — it captures your voice and plays back audio. All the heavy lifting happens on the Vritti cloud gateway:
+The gateway does the heavy work:
+- chat
+- speech-to-text
+- text-to-speech
+- device approval
+- device tokens
+- privacy-first memory
+- admin dashboard
 
-```
-  🎤 You speak
-     ↓
-  🟠 [Pi] Mic → Silero VAD + streaming voice relay
-     ↓
-  🧠 [Cloud] Streaming STT → fast LLM → streaming TTS
-     ↓
-  🪷 Mandala face animates throughout
+This means the Pi stays light, simple, and cheaper to run.
+
+---
+
+## 🧭 How It Works
+
+```text
+         YOU
+          │
+          ▼
+   🎤 Speak to Pi
+          │
+          ▼
+ ┌───────────────────────┐
+ │ Raspberry Pi Device   │
+ │                       │
+ │  • Mic / speaker      │
+ │  • Silero VAD         │
+ │  • Face UI            │
+ │  • Local relay        │
+ │  • Heartbeat agent    │
+ └──────────┬────────────┘
+            │
+            ▼
+ ┌──────────────────────────────┐
+ │ Vritti Gateway               │
+ │                              │
+ │  • Device auth               │
+ │  • Chat                      │
+ │  • STT                       │
+ │  • TTS                       │
+ │  • Memory + summaries        │
+ │  • Admin dashboard           │
+ └──────────┬───────────────────┘
+            │
+            ▼
+   🔊 Audio reply to Pi
+            │
+            ▼
+      🪷 Face reacts
 ```
 
 ---
 
-## ✨ Features
+## ✨ What You Get
 
-| | Feature | Details |
-|---|---------|---------|
-| 🗣️ | **Multilingual** | 10+ Indian languages, auto-detects and responds in your language |
-| 🧠 | **Neural VAD** | Silero voice activity detection (~2MB), no false triggers |
-| 📡 | **Thin client** | No API keys on device, no GPU needed on Pi |
-| 🧯 | **Gateway fallback** | Gateway-first with local Ollama fallback on the Pi |
-| 🪷 | **Mandala face** | Living animated display reacts to conversation state |
-| ⚡ | **One-command install** | Interactive installer with model selection |
-| 🔄 | **Auto-start** | systemd services — boots ready to talk |
-| 🔐 | **Secure** | Device token auth, hashed tokens, no secrets on Pi |
+| Feature | What it means |
+|---|---|
+| 🗣️ Multilingual voice | Built for Indian language use cases |
+| 🪷 Kiosk face UI | Full-screen mandala display for the Pi |
+| 📡 Gateway-first design | Pi uses the gateway first for real work |
+| 🧯 Optional local fallback | Pi can run gateway-only or use local Ollama fallback |
+| 🔐 Approved device access | A Pi must be approved from the gateway dashboard |
+| 🧠 Privacy-first memory | Memory facts and summaries persist, raw transcripts are off by default on the gateway |
+| ⚙️ Auto-start services | `systemd` starts the Pi stack on boot |
+| 🎛️ Simple installer | One interactive installer for the Pi |
 
 ---
 
-## 🔧 Hardware
+## 🧱 Pi Architecture
 
-| Component | Requirement |
-|-----------|-------------|
-| 🖥️ **Board** | Raspberry Pi 4 (4GB+) or Pi 5 |
-| 🎤 **Mic** | USB microphone |
-| 🔊 **Speaker** | 3.5mm or USB speaker |
-| 📺 **Display** | HDMI screen for mandala face *(optional)* |
-| 💾 **Storage** | 16GB+ SD card |
+```text
+┌──────────────────────────────────────────────┐
+│ Pi Side                                      │
+│                                              │
+│  ai-runtime      -> local API on :8000       │
+│  vritti-voice    -> mic + VAD + shared state │
+│  vritti-kiosk    -> Chromium full-screen UI  │
+│  device-agent    -> heartbeat to gateway     │
+└──────────────────────────────────────────────┘
+```
+
+Main files:
+- `pi/ai-runtime/`
+- `pi/face-ui/`
+- `pi/device-agent/`
+- `pi/installer/`
+- `pi/systemd/`
+
+---
+
+## 🧰 Hardware
+
+| Part | Recommended |
+|---|---|
+| Board | Raspberry Pi 4 (4 GB+) or Pi 5 |
+| Mic | USB mic |
+| Speaker | USB or 3.5mm speaker |
+| Display | HDMI display for face UI |
+| Storage | 16 GB+ microSD |
+| Network | Stable Wi‑Fi or Ethernet |
+
+You can still run without a display, but the face UI is part of the intended product experience.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1️⃣ Flash Raspberry Pi OS and boot your Pi
+### 1. Prepare the Pi
 
-### 2️⃣ Clone and install
+Install Raspberry Pi OS, boot the Pi, and connect it to the internet.
+
+### 2. Clone the repo
 
 ```bash
 git clone https://github.com/Thir13een/Vritti.git
 cd Vritti
+```
+
+### 3. Run the installer
+
+```bash
 sudo bash pi/installer/install.sh
 ```
 
-> 💡 The installer will guide you through model selection, dependency install, optional Ollama local fallback setup, and gateway access request.
-> It now fails the install if it cannot leave the Pi with at least one reachable chat backend: gateway or local Ollama.
-> If gateway access is enabled, the Pi may stay in `pending` until you approve it from the gateway dashboard.
+The installer does these things:
+- installs system packages
+- installs Chromium
+- copies Pi runtime files into `/opt`
+- installs Python dependencies
+- sets up `systemd` services
+- asks which local model mode you want
+- requests gateway access for the Pi
 
-### 3️⃣ Connect to gateway
+### 4. Choose Pi model mode
 
-Edit `/opt/ai-runtime/.env`:
+The installer offers:
+
+| Choice | Meaning |
+|---|---|
+| `0` | no local model, gateway-only |
+| `1` | `qwen3.5:0.8b` |
+| `2` | `qwen3.5:2b` |
+
+Simple rule:
+- choose `0` if you always want gateway mode
+- choose `1` for smaller Pis or low RAM
+- choose `2` for stronger local fallback on bigger Pis
+
+### 5. Approve the Pi
+
+The installer can request gateway access, but the Pi is not trusted automatically.
+
+Flow:
+
+```text
+Pi starts install
+   │
+   ▼
+Pi sends access request
+   │
+   ▼
+Gateway shows device as PENDING
+   │
+   ▼
+You approve it in dashboard
+   │
+   ▼
+Pi receives real device token
+```
+
+If the gateway is configured, the installer waits for approval for up to 5 minutes.
+
+---
+
+## 🔐 Gateway Settings On The Pi
+
+Main runtime config lives at:
+
+```text
+/opt/ai-runtime/.env
+```
+
+Typical values:
 
 ```env
-GATEWAY_URL=https://<your-gateway>/v1/chat
-GATEWAY_REGISTER_URL=https://<your-gateway>/v1/device/register
-GATEWAY_BOOTSTRAP_SECRET=<secret from gateway admin>
+GATEWAY_URL=https://vritti.dev/v1/chat
+GATEWAY_VOICE_WS_URL=wss://vritti.dev/v1/voice/ws
+GATEWAY_REGISTER_URL=https://vritti.dev/v1/device/register
+GATEWAY_BOOTSTRAP_SECRET=<secret from gateway>
+GATEWAY_DEVICE_TOKEN=<auto-issued after approval>
+DEVICE_ID=<hostname or custom id>
 ```
 
-Then approve the Pi from the gateway dashboard if it appears as `pending`.
+Heartbeat config lives at:
 
-```bash
-sudo systemctl restart ai-runtime device-agent vritti-voice
+```text
+/opt/device-agent/.env
 ```
-
-🎉 **That's it — start talking!**
 
 ---
 
-## 📁 Project Structure
+## 🗂️ Project Layout
 
-```
+```text
 pi/
-├── ai-runtime/       🧠 FastAPI server + voice pipeline + local AI
-├── face-ui/          🪷 Living mandala display (HTML/JS Canvas)
-├── device-agent/     📡 Heartbeat agent for gateway connectivity
-├── installer/        ⚡ One-command interactive setup
-└── systemd/          🔄 Service units (auto-start on boot)
+├── ai-runtime/        FastAPI Pi runtime
+├── device-agent/      Heartbeat agent
+├── face-ui/           Mandala browser UI
+├── installer/         Pi installer and env examples
+└── systemd/           Service unit files
 ```
 
 ---
 
-## ⚙️ Services
+## ⚙️ Pi Services
 
-| Service | Description |
-|---------|-------------|
-| 🧠 `ai-runtime` | Local API server (port 8000), serves face UI, exposes voice state |
-| 🎤 `vritti-voice` | Voice pipeline — mic → VAD → shared state + local diagnostics |
-| 🪷 `vritti-kiosk` | Fullscreen Chromium kiosk showing mandala face |
-| 📡 `device-agent` | Heartbeat to gateway every 60s |
+| Service | Purpose |
+|---|---|
+| `ai-runtime` | local API, face UI serving, gateway relay |
+| `vritti-voice` | mic pipeline, VAD, shared runtime state |
+| `vritti-kiosk` | Chromium kiosk face UI |
+| `device-agent` | heartbeat to gateway |
 
----
-
-## 🛠️ Useful Commands
+Check them:
 
 ```bash
-# 📊 Status
 sudo systemctl status ai-runtime vritti-voice device-agent
+```
 
-# 📋 Logs
-sudo journalctl -u vritti-voice -f
+Restart them:
 
-# 💬 Test chat
-curl -s http://127.0.0.1:8000/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Namaste, kaise ho?"}'
-
-# 🔄 Restart
+```bash
 sudo systemctl restart ai-runtime vritti-voice device-agent
 ```
 
 ---
 
-## 📝 Configuration
+## 🧪 Health And Debugging
 
-Runtime config: `/opt/ai-runtime/.env`
+### Pi runtime health
 
-| Variable | Description |
-|----------|-------------|
-| `GATEWAY_URL` | Gateway chat endpoint |
-| `GATEWAY_VOICE_WS_URL` | Gateway streaming voice WebSocket endpoint |
-| `GATEWAY_DEVICE_TOKEN` | Auth token (auto-issued on registration) |
-| `DEVICE_ID` | Pi identifier (defaults to hostname) |
-| `LOCAL_MODEL` | Local Ollama model (`qwen3.5:0.8b` / `qwen3.5:2b`) or blank for gateway-only installs |
-| `LOCAL_BACKEND` | `ollama` or `none` on Pi installs |
-| `VAD_THRESHOLD` | Speech detection sensitivity (default: `0.5`) |
-| `VOICE_STREAM_FRAME_MS` | Browser voice stream chunk size for gateway relay |
-| `VRITTI_FACE_UI_SOURCE` | Set to `github` to serve the face UI from GitHub raw (cached on startup) instead of `/opt/face-ui` |
-| `VRITTI_FACE_UI_GITHUB_URL` | Optional raw URL to `index.html` (default: `Thir13een/Vritti` main `pi/face-ui/index.html`) |
+```bash
+curl -s http://127.0.0.1:8000/health
+```
+
+You should usually see:
+- `status: ok`
+- `gateway: reachable`
+- `backend: reachable`
+
+### Important note about local fallback
+
+On a machine that is not a real Pi install, local fallback may show as unreachable if local Ollama or llama.cpp is not running.
+
+That is fine if:
+- gateway is reachable
+- backend is reachable
+
+### Useful logs
+
+```bash
+sudo journalctl -u ai-runtime -f
+sudo journalctl -u vritti-voice -f
+sudo journalctl -u device-agent -f
+```
 
 ---
 
-## Voice Streaming
+## 🎙️ Voice Path
 
-The Pi UI now prefers a local WebSocket relay at `ws://127.0.0.1:8000/v1/voice/ws` and falls back to the older batch `/v1/voice-proxy` path if the gateway voice WebSocket is unavailable.
+Preferred path:
 
-For the low-latency path, your gateway must expose a streaming voice endpoint compatible with `GATEWAY_VOICE_WS_URL`.
+```text
+Browser UI
+  -> ws://127.0.0.1:8000/v1/voice/ws
+  -> Pi runtime relay
+  -> gateway voice endpoint
+```
 
-Recommended voice model split:
+Fallback path:
 
-- Voice / talk mode: `Sarvam 30B`
-- Build / deep reasoning mode: `Sarvam 105B`
+```text
+Browser UI
+  -> /v1/voice-proxy
+  -> Pi runtime
+  -> gateway
+```
+
+This gives lower latency when the streaming path is available.
 
 ---
 
-## 🏗️ Tech Stack
+## 🛠️ Useful Commands
+
+### Test chat
+
+```bash
+curl -s http://127.0.0.1:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Namaste"}'
+```
+
+### Check config summary
+
+```bash
+curl -s http://127.0.0.1:8000/v1/config
+```
+
+### Check mode
+
+```bash
+curl -s http://127.0.0.1:8000/v1/mode
+```
+
+---
+
+## 🧾 Important Config Values
+
+| Variable | Meaning |
+|---|---|
+| `LOCAL_BACKEND` | `ollama` or `none` |
+| `LOCAL_MODEL` | local Ollama model if enabled |
+| `GATEWAY_URL` | chat endpoint |
+| `GATEWAY_VOICE_WS_URL` | streaming voice endpoint |
+| `GATEWAY_REGISTER_URL` | approval request endpoint |
+| `GATEWAY_DEVICE_TOKEN` | approved device token |
+| `DEVICE_ID` | Pi identifier |
+| `VAD_THRESHOLD` | voice detection sensitivity |
+| `VOICE_STREAM_FRAME_MS` | browser voice chunk size |
+| `VRITTI_FACE_UI_SOURCE` | face UI source selection |
+
+---
+
+## 🧠 Gateway-Only vs Local Fallback
+
+```text
+Option A: Gateway-only
+Pi -> Gateway
+
+Option B: Gateway-first + local fallback
+Pi -> Gateway
+     └─ if unavailable -> local Ollama
+```
+
+Recommended:
+- use gateway-only if your network is stable and you want the simplest setup
+- use local fallback if you want some device-side resilience
+
+---
+
+## 🧩 Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| 🎤 Voice detection | Silero VAD (PyTorch, ~2MB) |
-| 💬 Chat AI | Sarvam AI / OpenRouter (gateway) or local Qwen |
-| 🧠 Local model | Optional Qwen 3.5 (0.8B / 2B via Ollama) or gateway-only mode |
-| 🖥️ Pi server | FastAPI + Uvicorn |
-| 🪷 Face display | HTML5 Canvas mandala animation |
-| ⚙️ Process manager | systemd |
+|---|---|
+| Pi API | FastAPI + Uvicorn |
+| Voice detection | Silero VAD |
+| Kiosk browser | Chromium |
+| Local fallback | Ollama + Qwen 3.5 |
+| Service management | systemd |
+| Face UI | HTML + Canvas |
+
+---
+
+## 🛟 Troubleshooting
+
+### Installer says the device is still pending
+
+Open the gateway dashboard and approve the Pi.
+
+### `backend` is unreachable
+
+Check:
+- gateway URL
+- token
+- internet access
+- gateway health
+
+### Mic problems
+
+Check:
+
+```bash
+arecord -l
+aplay -l
+```
+
+### Kiosk does not open
+
+Check:
+
+```bash
+sudo systemctl status vritti-kiosk
+```
+
+---
+
+## 🔗 Related Repo
+
+Gateway repo:
+- `Vritti-Gateway`
+
+That repo handles:
+- device approval
+- dashboard
+- chat/STT/TTS
+- memory
+- privacy and cleanup
 
 ---
 
 <p align="center">
-  <strong>🪷 Vritti</strong> — <em>AI for every Indian language</em>
+  <strong>🪷 Vritti</strong><br/>
+  <em>Simple voice product for Raspberry Pi devices</em>
 </p>

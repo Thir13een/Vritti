@@ -76,7 +76,7 @@ def local_chat(cfg: RuntimeConfig, prompt: str) -> tuple[str, str]:
         raise RuntimeError("local model not configured")
 
     system_text = (
-        "You are Vritti, a concise backup AI assistant. "
+        "You are Vritti, a concise backup voice companion. "
         "Be warm and conversational. Reply in the same language the user writes in."
     )
     messages = [{"role": "system", "content": system_text}, {"role": "user", "content": prompt}]
