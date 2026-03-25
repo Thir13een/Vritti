@@ -989,12 +989,12 @@ fi
 echo ""
 if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
   if [[ "${TOKEN_SOURCE}" == "pending_approval" ]]; then
-    warn "Gateway token not issued yet. Approve this Pi in the gateway dashboard, then re-run:"
+    warn "Gateway token not issued yet. Approve this Pi in the gateway dashboard, then run again:"
     echo ""
     cmd "bash <(curl -fsSL https://raw.githubusercontent.com/Thir13een/Vritti/main/install-pi.sh)"
     echo ""
   elif [[ "${TOKEN_SOURCE}" == "rejected" ]]; then
-    warn "Gateway access was rejected. Review it in the dashboard, then re-run:"
+    warn "Gateway access was rejected. Review it in the dashboard, then run again:"
     echo ""
     cmd "bash <(curl -fsSL https://raw.githubusercontent.com/Thir13een/Vritti/main/install-pi.sh)"
     echo ""
