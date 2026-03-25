@@ -181,6 +181,35 @@ require_cmd_or_fail() {
   fi
 }
 
+require_file_or_fail() {
+  local path="$1" hint="${2:-}"
+  if [[ -f "$path" ]]; then
+    ok "Verified file" "$path"
+  else
+    fail "Missing required file: ${path}${hint:+ (${hint})}"
+    exit 1
+  fi
+}
+
+wait_for_http_ok() {
+  local url="$1" attempts="${2:-20}" delay_seconds="${3:-1}"
+  local attempt=""
+  for attempt in $(seq 1 "$attempts"); do
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fsS "$url" >/dev/null 2>&1; then
+        return 0
+      fi
+    else
+      python3 - "$url" <<'PY' >/dev/null 2>&1 && return 0 || true
+import sys, urllib.request
+urllib.request.urlopen(sys.argv[1], timeout=3)
+PY
+    fi
+    sleep "$delay_seconds"
+  done
+  return 1
+}
+
 install_runtime_python_deps() {
   local base_requirements="/tmp/ai-runtime-requirements-no-torch.txt"
   grep -vE '^[[:space:]]*torch([[:space:]=<>!~].*)?$' /opt/ai-runtime/requirements.txt > "$base_requirements"
@@ -446,12 +475,24 @@ doing "Copying runtime source files"
 cp "${REPO_DIR}/ai-runtime/"*.py /opt/ai-runtime/
 cp "${REPO_DIR}/ai-runtime/requirements.txt" /opt/ai-runtime/
 ok "Copied Python files" "config.py, runtime.py, server.py"
+require_file_or_fail /opt/ai-runtime/server.py "runtime entrypoint"
+require_file_or_fail /opt/ai-runtime/runtime.py "chat backend orchestration"
+require_file_or_fail /opt/ai-runtime/voice_ws.py "browser voice relay"
+require_file_or_fail /opt/ai-runtime/voice_pipeline.py "local voice daemon"
+require_file_or_fail /opt/ai-runtime/requirements.txt "runtime Python dependencies"
+
+doing "Setting runtime file permissions"
+chown -R "${PI_USER}:${PI_USER}" /opt/ai-runtime
+find /opt/ai-runtime -maxdepth 1 -type f \( -name '*.py' -o -name 'requirements.txt' \) -exec chmod 644 {} +
+ok "Runtime files secured" "owner: ${PI_USER}"
 
 if [[ -d "${REPO_DIR}/face-ui" ]]; then
   doing "Copying face UI (mandala)"
   mkdir -p /opt/face-ui
   cp -r "${REPO_DIR}/face-ui/." /opt/face-ui/
   ok "Face UI copied" "/opt/face-ui"
+  chown -R "${PI_USER}:${PI_USER}" /opt/face-ui
+  require_file_or_fail /opt/face-ui/index.html "kiosk UI entrypoint"
 fi
 
 if [[ -d "${REPO_DIR}/ai-runtime/static" ]]; then
@@ -459,6 +500,7 @@ if [[ -d "${REPO_DIR}/ai-runtime/static" ]]; then
   mkdir -p /opt/ai-runtime/static
   cp -r "${REPO_DIR}/ai-runtime/static/." /opt/ai-runtime/static/
   ok "Static files copied" "fallback UI"
+  require_file_or_fail /opt/ai-runtime/static/index.html "fallback UI entrypoint"
 fi
 
 doing "Creating Python virtual environment"
@@ -480,6 +522,15 @@ if missing:
     raise SystemExit("missing imports: " + ", ".join(missing))
 PY
 ok "Python runtime dependencies verified" "fastapi, numpy, torch, torchaudio, pyaudio"
+
+doing "Verifying runtime Python files"
+/opt/ai-runtime/.venv/bin/python -m py_compile \
+  /opt/ai-runtime/config.py \
+  /opt/ai-runtime/runtime.py \
+  /opt/ai-runtime/server.py \
+  /opt/ai-runtime/voice_ws.py \
+  /opt/ai-runtime/voice_pipeline.py
+ok "Runtime Python files verified" "py_compile"
 
 doing "Verifying local Silero VAD bundle"
 SILERO_VAD_DIR=/opt/ai-runtime/models/silero-vad /opt/ai-runtime/.venv/bin/python - <<'PY'
@@ -521,6 +572,10 @@ if install_ollama_backend "$SELECTED_MODEL"; then
 else
   warn "Local fallback backend was not fully provisioned"
 fi
+
+doing "Finalizing runtime ownership"
+chown -R "${PI_USER}:${PI_USER}" /opt/ai-runtime
+ok "Runtime ownership finalized" "owner: ${PI_USER}"
 step_done
 
 # Step 4: device-agent
@@ -530,10 +585,21 @@ echo ""
 
 doing "Creating /opt/device-agent"
 mkdir -p /opt/device-agent
+chown "${PI_USER}:${PI_USER}" /opt/device-agent
 
 doing "Copying agent source"
 cp "${REPO_DIR}/device-agent/agent.py" /opt/device-agent/
 ok "Device agent installed" "/opt/device-agent/agent.py"
+require_file_or_fail /opt/device-agent/agent.py "device heartbeat worker"
+
+doing "Setting device-agent file permissions"
+chown "${PI_USER}:${PI_USER}" /opt/device-agent/agent.py
+chmod 644 /opt/device-agent/agent.py
+ok "Device agent file secured" "owner: ${PI_USER}"
+
+doing "Verifying device-agent syntax"
+python3 -m py_compile /opt/device-agent/agent.py
+ok "Device agent verified" "python3 -m py_compile"
 
 if [[ ! -f "$AGENT_ENV" ]]; then
   doing "Creating agent .env from example"
@@ -554,20 +620,20 @@ step_header 5 "Device registration & token"
 info "Registering with gateway to get a device token."
 echo ""
 
+DEVICE_ID="$(get_env "$RUNTIME_ENV" "DEVICE_ID" || true)"
+if [[ -z "${DEVICE_ID}" || "${DEVICE_ID}" == "pi-001" ]]; then
+  DEVICE_ID="$(hostname)"
+  upsert_env "$RUNTIME_ENV" "DEVICE_ID" "$DEVICE_ID"
+  info "Device ID set to hostname: ${BOLD}${DEVICE_ID}${RST}"
+fi
+upsert_env "$AGENT_ENV" "DEVICE_ID" "$DEVICE_ID"
+
 TOKEN="$(get_env "$RUNTIME_ENV" "GATEWAY_DEVICE_TOKEN" || true)"
 TOKEN_SOURCE="existing"
 
 if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
   REGISTER_URL="$(get_env "$RUNTIME_ENV" "GATEWAY_REGISTER_URL" || true)"
   BOOTSTRAP_SECRET="$(get_env "$RUNTIME_ENV" "GATEWAY_BOOTSTRAP_SECRET" || true)"
-  DEVICE_ID="$(get_env "$RUNTIME_ENV" "DEVICE_ID" || true)"
-
-  if [[ -z "${DEVICE_ID}" || "${DEVICE_ID}" == "pi-001" ]]; then
-    DEVICE_ID="$(hostname)"
-    upsert_env "$RUNTIME_ENV" "DEVICE_ID" "$DEVICE_ID"
-    info "Device ID set to hostname: ${BOLD}${DEVICE_ID}${RST}"
-  fi
-  upsert_env "$AGENT_ENV" "DEVICE_ID" "$DEVICE_ID"
 
   # Prompt for bootstrap secret
   if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
@@ -698,6 +764,10 @@ doing "Reloading systemd daemon"
 systemctl daemon-reload
 ok "systemd reloaded"
 
+doing "Clearing failed service states"
+systemctl reset-failed ai-runtime device-agent vritti-voice >/dev/null 2>&1 || true
+ok "Failed states cleared"
+
 doing "Enabling services for auto-start on boot"
 systemctl enable ai-runtime device-agent vritti-kiosk vritti-voice 2>&1 | stream_progress
 ok "Services enabled" "ai-runtime, device-agent, kiosk, voice"
@@ -706,12 +776,17 @@ doing "Starting ai-runtime"
 systemctl restart ai-runtime
 sleep 2
 if systemctl is-active --quiet ai-runtime; then
-  ok "ai-runtime is running" "port 8000"
+  if wait_for_http_ok "http://127.0.0.1:8000/health" 20 1; then
+    ok "ai-runtime is running" "port 8000"
+  else
+    warn "ai-runtime service is active, but /health did not become ready"
+  fi
 else
   warn "ai-runtime may not have started, check the logs below"
 fi
 
 doing "Starting device-agent"
+require_file_or_fail /opt/device-agent/agent.py "device-agent ExecStart target"
 systemctl restart device-agent
 sleep 1
 if systemctl is-active --quiet device-agent; then
