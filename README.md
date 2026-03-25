@@ -76,8 +76,9 @@ cd Vritti
 sudo bash pi/installer/install.sh
 ```
 
-> 💡 The installer will guide you through model selection, dependency install, optional Ollama local fallback setup, and gateway registration.
+> 💡 The installer will guide you through model selection, dependency install, optional Ollama local fallback setup, and gateway access request.
 > It now fails the install if it cannot leave the Pi with at least one reachable chat backend: gateway or local Ollama.
+> If gateway access is enabled, the Pi may stay in `pending` until you approve it from the gateway dashboard.
 
 ### 3️⃣ Connect to gateway
 
@@ -88,6 +89,8 @@ GATEWAY_URL=https://<your-gateway>/v1/chat
 GATEWAY_REGISTER_URL=https://<your-gateway>/v1/device/register
 GATEWAY_BOOTSTRAP_SECRET=<secret from gateway admin>
 ```
+
+Then approve the Pi from the gateway dashboard if it appears as `pending`.
 
 ```bash
 sudo systemctl restart ai-runtime device-agent vritti-voice

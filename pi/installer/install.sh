@@ -367,7 +367,7 @@ get_env() {
 register_with_gateway() {
   local register_url="$1" bootstrap_secret="$2" device_id="$3"
   python3 - "$register_url" "$bootstrap_secret" "$device_id" <<'PY'
-import json, sys, urllib.request
+import json, sys, urllib.error, urllib.request
 register_url, bootstrap_secret, device_id = sys.argv[1], sys.argv[2], sys.argv[3]
 req = urllib.request.Request(
     register_url,
@@ -375,9 +375,42 @@ req = urllib.request.Request(
     headers={"Content-Type": "application/json", "x-bootstrap-secret": bootstrap_secret},
     method="POST",
 )
-with urllib.request.urlopen(req, timeout=20) as resp:
-    data = json.loads(resp.read().decode("utf-8"))
-print((data.get("device_token") or "").strip())
+try:
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+except urllib.error.HTTPError as exc:
+    body = exc.read().decode("utf-8", errors="replace")
+    try:
+        payload = json.loads(body)
+    except Exception:
+        payload = {"detail": body[:300] or f"http {exc.code}"}
+    payload.setdefault("status", "error")
+    payload.setdefault("detail", f"http {exc.code}")
+    print(json.dumps(payload))
+except Exception as exc:
+    print(json.dumps({"status": "error", "detail": str(exc)}))
+else:
+    print(json.dumps(data))
+PY
+}
+
+json_field() {
+  local payload="$1" field="$2"
+  python3 - "$field" <<'PY' <<<"$payload"
+import json
+import sys
+
+field = sys.argv[1]
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    print("")
+    raise SystemExit(0)
+value = data.get(field, "")
+if value is None:
+    value = ""
+print(value)
 PY
 }
 
@@ -669,7 +702,7 @@ step_done
 
 # Step 5: Device registration
 step_header 5 "Device registration & token"
-info "Registering with gateway to get a device token."
+info "Requesting gateway access for this Pi."
 echo ""
 
 DEVICE_ID="$(get_env "$RUNTIME_ENV" "DEVICE_ID" || true)"
@@ -714,20 +747,57 @@ if [[ -z "${TOKEN}" || "${TOKEN}" == "replace_with_device_token" ]]; then
   fi
 
   if [[ -n "${REGISTER_URL}" && -n "${BOOTSTRAP_SECRET}" && "${BOOTSTRAP_SECRET}" != "replace_with_bootstrap_secret" ]]; then
-    doing "Registering device with gateway"
+    doing "Requesting device access from gateway"
     info "Register URL: ${REGISTER_URL}"
     info "Device ID: ${DEVICE_ID}"
-    set +e
-    TOKEN="$(register_with_gateway "$REGISTER_URL" "$BOOTSTRAP_SECRET" "$DEVICE_ID")"
-    REG_STATUS=$?
-    set -e
-    if [[ $REG_STATUS -ne 0 || -z "${TOKEN}" ]]; then
+    REG_RESPONSE="$(register_with_gateway "$REGISTER_URL" "$BOOTSTRAP_SECRET" "$DEVICE_ID")"
+    REG_STATE="$(json_field "$REG_RESPONSE" status)"
+    REG_TOKEN="$(json_field "$REG_RESPONSE" device_token)"
+    REG_DETAIL="$(json_field "$REG_RESPONSE" detail)"
+
+    if [[ "${REG_STATE}" == "approved" && -n "${REG_TOKEN}" ]]; then
+      TOKEN="${REG_TOKEN}"
+      ok "Gateway access approved" "device_id: ${DEVICE_ID}"
+      TOKEN_SOURCE="gateway"
+    elif [[ "${REG_STATE}" == "pending" ]]; then
+      TOKEN="replace_with_device_token"
+      TOKEN_SOURCE="pending_approval"
+      warn "Gateway access request is pending admin approval"
+      info "${REG_DETAIL:-Approve this Pi from the gateway dashboard to continue}"
+      info "Polling for approval for up to 5 minutes"
+      for _attempt in $(seq 1 60); do
+        sleep 5
+        REG_RESPONSE="$(register_with_gateway "$REGISTER_URL" "$BOOTSTRAP_SECRET" "$DEVICE_ID")"
+        REG_STATE="$(json_field "$REG_RESPONSE" status)"
+        REG_TOKEN="$(json_field "$REG_RESPONSE" device_token)"
+        REG_DETAIL="$(json_field "$REG_RESPONSE" detail)"
+        if [[ "${REG_STATE}" == "approved" && -n "${REG_TOKEN}" ]]; then
+          TOKEN="${REG_TOKEN}"
+          TOKEN_SOURCE="gateway"
+          ok "Gateway access approved" "device_id: ${DEVICE_ID}"
+          break
+        fi
+        if [[ "${REG_STATE}" == "rejected" ]]; then
+          TOKEN="replace_with_device_token"
+          TOKEN_SOURCE="rejected"
+          warn "Gateway access request was rejected by admin"
+          break
+        fi
+      done
+      if [[ "${TOKEN_SOURCE}" == "pending_approval" ]]; then
+        warn "Approval not received yet — leaving gateway token unset for now"
+      fi
+    elif [[ "${REG_STATE}" == "rejected" ]]; then
+      TOKEN="replace_with_device_token"
+      TOKEN_SOURCE="rejected"
+      warn "Gateway access request was rejected by admin"
+    else
       warn "Gateway registration failed; leaving gateway token unset"
+      if [[ -n "${REG_DETAIL}" ]]; then
+        info "Gateway detail: ${REG_DETAIL}"
+      fi
       TOKEN="replace_with_device_token"
       TOKEN_SOURCE="registration_failed"
-    else
-      ok "Registered with gateway" "device_id: ${DEVICE_ID}"
-      TOKEN_SOURCE="gateway"
     fi
   else
     if [[ -z "${BOOTSTRAP_SECRET}" || "${BOOTSTRAP_SECRET}" == "replace_with_bootstrap_secret" ]]; then
