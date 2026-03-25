@@ -988,15 +988,20 @@ else
 fi
 echo ""
 if [[ "${TOKEN}" == "replace_with_device_token" ]]; then
-  warn "Gateway token not issued yet. To connect this Pi to the server:"
-  echo ""
-  cmd "Edit /opt/ai-runtime/.env:"
-  echo "       ${DIM}GATEWAY_URL=http://<server-ip>:9000/v1/chat${RST}"
-  echo "       ${DIM}GATEWAY_REGISTER_URL=http://<server-ip>:9000/v1/device/register${RST}"
-  echo ""
-  cmd "Then approve this device from the gateway dashboard and re-run the installer:"
-  cmd "sudo bash pi/installer/install.sh"
-  echo ""
+  if [[ "${TOKEN_SOURCE}" == "pending_approval" ]]; then
+    warn "Gateway token not issued yet. Approve this Pi in the gateway dashboard, then re-run:"
+    echo ""
+    cmd "bash <(curl -fsSL https://raw.githubusercontent.com/Thir13een/Vritti/main/install-pi.sh)"
+    echo ""
+  elif [[ "${TOKEN_SOURCE}" == "rejected" ]]; then
+    warn "Gateway access was rejected. Review it in the dashboard, then re-run:"
+    echo ""
+    cmd "bash <(curl -fsSL https://raw.githubusercontent.com/Thir13een/Vritti/main/install-pi.sh)"
+    echo ""
+  elif [[ "${TOKEN_SOURCE}" == "not_configured" ]]; then
+    warn "Gateway registration is not configured for this Pi."
+    echo ""
+  fi
 fi
 
 section_box "Configuration Files" "$MAGENTA"
