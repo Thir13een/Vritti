@@ -500,6 +500,8 @@ const TAU = Math.PI * 2;
 const RING_LEN = 2 * Math.PI * 68;
 const CONVERSATION_KEY = 'vritti-conversation-state';
 const CONVERSATION_IDLE_MS = 30 * 60 * 1000;
+const STATE_POLL_MS = 1000;
+const HEALTH_POLL_MS = 5000;
 
 const STATUS_COPY = {
   idle: {
@@ -712,12 +714,15 @@ let targetParams = getParams('idle');
 let cur = Object.assign({}, prevParams);
 
 function updateModeChrome() {
-  modeLabel.textContent = MODE_COPY[currentMode] || currentMode;
+  const label = MODE_COPY[currentMode] || currentMode;
+  if (modeLabel.textContent !== label) modeLabel.textContent = label;
 }
 
 function setStatusMessage(message) {
-  micStatusMessage = message || '';
-  statusLine.textContent = micStatusMessage;
+  const next = message || '';
+  if (micStatusMessage === next) return;
+  micStatusMessage = next;
+  if (statusLine.textContent !== micStatusMessage) statusLine.textContent = micStatusMessage;
 }
 
 function applyMicAvailability() {
@@ -738,8 +743,8 @@ function setMicAvailability(available, message) {
 
 function updateStatusChrome() {
   const copy = STATUS_COPY[state] || STATUS_COPY.idle;
-  stateWord.textContent = copy.word;
-  document.body.dataset.face = state;
+  if (stateWord.textContent !== copy.word) stateWord.textContent = copy.word;
+  if (document.body.dataset.face !== state) document.body.dataset.face = state;
 }
 
 function setState(newState, force) {
@@ -1016,6 +1021,7 @@ async function checkBrowserMicAccess() {
 }
 
 async function loadRuntimeHealth() {
+  if (document.hidden) return;
   try {
     const response = await fetch('/health', { signal: AbortSignal.timeout(2000) });
     if (!response.ok) return;
@@ -1489,6 +1495,7 @@ document.addEventListener('visibilitychange', function () {
 });
 
 async function pollState() {
+  if (document.hidden) return;
   if (micActive || processing || currentAudio || micIssueActive || runtimeOffline) return;
   try {
     const r = await fetch('/v1/state', { signal: AbortSignal.timeout(2000) });
@@ -1498,8 +1505,8 @@ async function pollState() {
     if (d.state !== state) setState(d.state);
   } catch {}
 }
-setInterval(pollState, 500);
-setInterval(loadRuntimeHealth, 3000);
+setInterval(pollState, STATE_POLL_MS);
+setInterval(loadRuntimeHealth, HEALTH_POLL_MS);
 
 async function loadMode() {
   try {
