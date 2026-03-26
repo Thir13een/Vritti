@@ -740,18 +740,18 @@ setInterval(syncDayPart, 60000);
 function getParams(st) {
   const p = {
     openness: 0.58,
-    pulse: 0.16,
-    spin: 0.08,
+    pulse: 0.08,
+    spin: 0.07,
     flare: 0.22,
     glow: 0.22,
     particles: 0.26,
   };
   if (st === 'listening') {
-    p.openness = 0.78; p.pulse = 0.28; p.spin = 0.14; p.flare = 0.36; p.glow = 0.34; p.particles = 0.48;
+    p.openness = 0.54; p.pulse = 0.1; p.spin = 0.11; p.flare = 0.34; p.glow = 0.36; p.particles = 0.38;
   } else if (st === 'thinking') {
-    p.openness = 0.46; p.pulse = 0.09; p.spin = 0.18; p.flare = 0.18; p.glow = 0.24; p.particles = 0.18;
+    p.openness = 0.48; p.pulse = 0.04; p.spin = 0.07; p.flare = 0.16; p.glow = 0.2; p.particles = 0.14;
   } else if (st === 'speaking') {
-    p.openness = 0.9; p.pulse = 0.34; p.spin = 0.12; p.flare = 0.46; p.glow = 0.42; p.particles = 0.54;
+    p.openness = 0.62; p.pulse = 0.12; p.spin = 0.09; p.flare = 0.46; p.glow = 0.42; p.particles = 0.34;
   } else if (st === 'error') {
     p.openness = 0.34; p.pulse = 0.05; p.spin = 0.04; p.flare = 0.16; p.glow = 0.16; p.particles = 0.12;
   }
@@ -868,21 +868,55 @@ function drawLotusMandala() {
   const base = Math.min(W, H) * (perfScale < 0.9 ? 0.102 : 0.114);
   const p = pal();
   const dp = dayPal();
-  const breathe = 1 + Math.sin(t * 0.76) * (0.035 + cur.pulse * 0.18) + amp * 0.06;
-  const open = cur.openness + amp * 0.12;
+  const breathWave = Math.sin(t * 0.58) * 0.55 + Math.sin(t * 0.23 + 0.9) * 0.45;
+  const ambientBreath = breathWave * (0.008 + cur.pulse * 0.045);
+  const focusTension = state === 'listening'
+    ? -0.045 - amp * 0.008 + Math.sin(t * 1.6) * 0.005
+    : state === 'thinking'
+      ? -0.072 + Math.sin(t * 0.74) * 0.003
+      : state === 'speaking'
+        ? 0.018 + amp * 0.014 + Math.sin(t * 2.5) * 0.006
+        : Math.sin(t * 0.92) * 0.004;
+  const bloom = 1 + (cur.openness - 0.58) * 0.16 + ambientBreath + focusTension;
+  const haloLift = state === 'speaking'
+    ? 0.12 + amp * 0.16
+    : state === 'listening'
+      ? 0.08 + Math.max(amp * 0.04, 0.02)
+      : state === 'thinking'
+        ? 0.035
+        : 0.05;
+  const corePulse = state === 'speaking'
+    ? 0.02 + amp * 0.04 + Math.sin(t * 5.2) * 0.009
+    : state === 'listening'
+      ? 0.008 + Math.sin(t * 2.6) * 0.004
+      : state === 'thinking'
+        ? 0.004 + Math.sin(t * 1.2) * 0.002
+        : 0.006 + Math.sin(t * 1.4) * 0.003;
   const rot = t * cur.spin;
   const outerCount = 8;
   const midCount = 8;
   const innerCount = perfScale < 0.9 ? 6 : 7;
 
-  drawGlow(cx, cy - base * 0.18, base * 7.6, dp.glowA, 0.1 + cur.glow * 0.04);
-  drawGlow(cx, cy + base * 0.22, base * 5.8, dp.glowB, 0.085 + cur.flare * 0.03);
-  drawGlow(cx, cy, base * 4.3, p.a, 0.09 + cur.glow * 0.06);
-  drawGlow(cx, cy, base * 3.2, p.b, 0.06 + cur.glow * 0.05);
-  drawGlow(cx, cy, base * 1.6, p.c, 0.08 + cur.flare * 0.06);
+  drawGlow(cx, cy - base * 0.18, base * 7.6, dp.glowA, 0.092 + cur.glow * 0.03 + haloLift * 0.02);
+  drawGlow(cx, cy + base * 0.22, base * 5.8, dp.glowB, 0.078 + cur.flare * 0.025 + haloLift * 0.016);
+  drawGlow(cx, cy, base * 4.3, p.a, 0.082 + cur.glow * 0.045 + haloLift * 0.035);
+  drawGlow(cx, cy, base * 3.2, p.b, 0.055 + cur.glow * 0.04 + haloLift * 0.025);
+  drawGlow(cx, cy, base * 1.6, p.c, 0.075 + cur.flare * 0.045 + corePulse * 0.3);
 
-  drawSoftRing(base * 1.18, mix(p.c, p.a, 0.18), 0.12 + cur.glow * 0.06, 1.1, rot * 0.18, TAU);
-  drawSoftRing(base * 2.18, mix(p.a, p.b, 0.2), 0.08 + cur.glow * 0.05, 0.9, rot * -0.1, TAU);
+  drawSoftRing(base * 1.18, mix(p.c, p.a, 0.18), 0.11 + cur.glow * 0.05 + corePulse * 0.12, 1.1, rot * 0.18, TAU);
+  drawSoftRing(base * 2.18, mix(p.a, p.b, 0.2), 0.075 + cur.glow * 0.045 + haloLift * 0.03, 0.9, rot * -0.1, TAU);
+
+  if (state === 'listening') {
+    const focusArc = TAU * 0.16;
+    drawSoftRing(base * 2.42, mix(p.c, p.a, 0.24), 0.16 + cur.glow * 0.04, 1.25, rot * 0.2, focusArc);
+    drawSoftRing(base * 2.42, mix(p.c, p.a, 0.24), 0.14 + cur.glow * 0.035, 1.25, rot * 0.2 + Math.PI, focusArc);
+  } else if (state === 'speaking') {
+    const wave = 0.5 + 0.5 * Math.sin(t * 4.6);
+    drawSoftRing(base * (2.48 + wave * 0.08), mix(p.a, p.c, 0.28), 0.13 + cur.flare * 0.07 + amp * 0.04, 1.3, rot * 0.08, TAU * 0.82);
+    drawSoftRing(base * (2.8 + wave * 0.06), mix(p.b, p.a, 0.32), 0.09 + cur.glow * 0.05, 0.95, rot * -0.06 + 0.4, TAU * 0.58);
+  } else if (state === 'thinking') {
+    drawSoftRing(base * 2.34, mix(p.c, p.b, 0.24), 0.09 + cur.glow * 0.025, 1.0, rot * 0.05, TAU * 0.66);
+  }
 
   const dotRings = perfScale < 0.9 ? 2 : 3;
   for (let r = 0; r < dotRings; r++) {
@@ -902,16 +936,16 @@ function drawLotusMandala() {
   }
 
   const layers = [
-    { count: outerCount, len: base * 2.48 * breathe * open, wid: base * 1.18, alpha: 0.34, offset: rot * 0.12, color: mix(p.a, p.c, 0.08) },
-    { count: midCount, len: base * 2.02 * breathe * (0.94 + open * 0.08), wid: base * 0.92, alpha: 0.28, offset: rot * -0.1 + TAU / 16, color: mix(p.b, p.c, 0.22) },
-    { count: innerCount, len: base * 1.34 * breathe, wid: base * 0.58, alpha: 0.24, offset: rot * 0.08 + TAU / 14, color: mix(p.a, p.b, 0.14) },
+    { count: outerCount, len: base * 2.48 * bloom, wid: base * 1.18, alpha: 0.34, offset: rot * 0.12, color: mix(p.a, p.c, 0.08) },
+    { count: midCount, len: base * 2.02 * (1 + ambientBreath * 0.7 + focusTension * 0.75), wid: base * 0.92, alpha: 0.28, offset: rot * -0.1 + TAU / 16, color: mix(p.b, p.c, 0.22) },
+    { count: innerCount, len: base * 1.34 * (1 + ambientBreath * 0.55 + focusTension * 0.45), wid: base * 0.58, alpha: 0.24, offset: rot * 0.08 + TAU / 14, color: mix(p.a, p.b, 0.14) },
   ];
 
   ctx.globalCompositeOperation = 'screen';
   layers.forEach(function (layer) {
     for (let i = 0; i < layer.count; i++) {
       const ang = layer.offset + i * (TAU / layer.count);
-      const wobble = 1 + Math.sin(t * 1.12 + i * 0.7) * 0.018 + amp * 0.03;
+      const wobble = 1 + Math.sin(t * 1.05 + i * 0.7) * 0.01 + ambientBreath * 0.45 + amp * 0.012;
       drawPetal(cx, cy, ang, layer.len * wobble, layer.wid, layer.color, layer.alpha);
     }
   });
@@ -919,17 +953,17 @@ function drawLotusMandala() {
 
   for (let i = 0; i < 6; i++) {
     const ang = rot * 0.16 + i * (TAU / 6);
-    drawPetal(cx, cy, ang, base * 0.98 * (1 + amp * 0.04), base * 0.34, mix(p.c, p.a, 0.1), 0.2 + cur.flare * 0.05);
+    drawPetal(cx, cy, ang, base * 0.98 * (1 + corePulse * 0.5), base * 0.34, mix(p.c, p.a, 0.1), 0.2 + cur.flare * 0.05);
   }
 
   ctx.beginPath();
-  ctx.arc(cx, cy, base * (0.46 + amp * 0.08), 0, TAU);
+  ctx.arc(cx, cy, base * (0.45 + corePulse), 0, TAU);
   ctx.fillStyle = rgba(mix(p.c, [255, 255, 255], 0.12), 0.86);
   ctx.fill();
 
   ctx.beginPath();
-  ctx.arc(cx, cy, base * (0.74 + amp * 0.05), 0, TAU);
-  ctx.strokeStyle = rgba(p.c, 0.1 + cur.glow * 0.06);
+  ctx.arc(cx, cy, base * (0.74 + corePulse * 0.38), 0, TAU);
+  ctx.strokeStyle = rgba(p.c, 0.1 + cur.glow * 0.06 + haloLift * 0.02);
   ctx.lineWidth = 1;
   ctx.stroke();
 
@@ -939,7 +973,7 @@ function drawLotusMandala() {
     const rr = base * (2.9 + (i % 3) * 0.14);
     const px = cx + Math.cos(ang) * rr;
     const py = cy + Math.sin(ang) * rr;
-    const size = 1.3 + (i % 2) * 0.45 + amp * 0.45;
+    const size = 1.3 + (i % 2) * 0.45 + haloLift * 0.35;
     ctx.beginPath();
     ctx.arc(px, py, size, 0, TAU);
     ctx.fillStyle = rgba(i % 2 ? p.a : p.b, 0.08 + cur.particles * 0.1);
