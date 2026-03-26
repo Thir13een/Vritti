@@ -975,6 +975,7 @@ let runtimeConfigPromise = null;
 let recordingStartedAt = 0;
 let pendingSpeechEnd = false;
 const modes = ['fast', 'deep'];
+let micLoopHandle = 0;
 
 function clampInt(v, min, max, fb) {
   const n = parseInt(v, 10);
@@ -1115,6 +1116,11 @@ function updateMicBtn() {
 function stopRecording() {
   if (!micActive) return;
   micActive = false;
+  barLoopRunning = false;
+  if (micLoopHandle) {
+    cancelAnimationFrame(micLoopHandle);
+    micLoopHandle = 0;
+  }
   updateMicBtn();
   if (silenceTimer) {
     clearTimeout(silenceTimer);
@@ -1464,6 +1470,10 @@ async function toggleMic() {
     let smoothRms = 0;
     let silenceStart = 0;
     (function micLoop() {
+      if (!barLoopRunning) {
+        micLoopHandle = 0;
+        return;
+      }
       if (micActive && micAnalyser && waveform) {
         smoothRms += (sampleRms(micAnalyser, waveform, 5) - smoothRms) * 0.3;
         setAmplitude(smoothRms);
@@ -1480,7 +1490,7 @@ async function toggleMic() {
           silenceStart = 0;
         }
       }
-      requestAnimationFrame(micLoop);
+      micLoopHandle = requestAnimationFrame(micLoop);
     })();
   }
 
