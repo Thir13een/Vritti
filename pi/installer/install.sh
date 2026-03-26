@@ -807,7 +807,7 @@ fi
 upsert_env "$RUNTIME_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
 upsert_env "$AGENT_ENV" "GATEWAY_DEVICE_TOKEN" "$TOKEN"
 
-# Derive heartbeat URL from GATEWAY_URL
+# Heartbeat URL
 GATEWAY_URL="$(get_env "$RUNTIME_ENV" "GATEWAY_URL" || true)"
 if [[ -n "${GATEWAY_URL}" && "${GATEWAY_URL}" != *"your-gateway-domain"* ]]; then
   HEARTBEAT_URL="${GATEWAY_URL%/v1/chat}/v1/device/heartbeat"

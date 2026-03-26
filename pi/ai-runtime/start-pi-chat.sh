@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# Start Pi chat with a clean runtime.
+# Start Pi chat cleanly.
 # Usage: ./start-pi-chat.sh
-# SKIP_OLLAMA=1 skips Ollama restart.
+# Set SKIP_OLLAMA=1 to skip restart.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Use sudo for docker if needed
+# Use sudo for Docker if needed.
 DOCKER="${DOCKER:-docker}"
 if ! $DOCKER info &>/dev/null; then
   DOCKER="sudo docker"
 fi
 
-# Clean up ports and old processes
+# Clear old ports and processes.
 echo "Closing any existing Pi chat / Ollama processes..."
 
-# Stop any vritti-ai-runtime container
+# Stop old Pi runtime containers.
 $DOCKER ps -q --filter "ancestor=vritti-ai-runtime" | xargs -r $DOCKER stop --time 5 2>/dev/null || true
 
-# Kill anything still on port 8000
+# Clear port 8000.
 while true; do
   PIDS=$(sudo lsof -ti:8000 2>/dev/null || true)
   [[ -z "$PIDS" ]] && break
@@ -29,7 +29,7 @@ while true; do
   sleep 1
 done
 
-# Kill whatever is on port 11434 (Ollama)
+# Clear port 11434.
 while true; do
   PIDS=$(sudo lsof -ti:11434 2>/dev/null || true)
   [[ -z "$PIDS" ]] && break
@@ -42,7 +42,7 @@ sleep 2
 echo "Ports 8000 and 11434 are free. Starting fresh."
 echo ""
 
-# Restart Ollama unless skipped
+# Restart Ollama unless skipped.
 if [[ "${SKIP_OLLAMA:-}" != "1" ]]; then
   if command -v ollama &>/dev/null; then
     echo "Restarting Ollama on 0.0.0.0:11434..."

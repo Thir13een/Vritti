@@ -44,7 +44,7 @@ cfg = RuntimeConfig.from_env()
 
 CHAT_TOKEN = os.getenv("CHAT_API_TOKEN", "").strip()
 
-# Optional GitHub face UI source.
+# Optional remote face UI.
 _DEFAULT_GITHUB_FACE_UI = (
     "https://raw.githubusercontent.com/Thir13een/Vritti/main/pi/face-ui/index.html"
 )

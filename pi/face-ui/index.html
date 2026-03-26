@@ -213,13 +213,14 @@ canvas#c {
 #bottomRail {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto auto auto;
   align-items: center;
   gap: clamp(12px, 1.6vw, 18px);
 }
 
 #modeBtn,
-#micWrap {
+#micWrap,
+#stopBtn {
   pointer-events: auto;
 }
 
@@ -310,6 +311,45 @@ canvas#c {
     inset 0 -8px 14px rgba(0,0,0,0.18);
 }
 
+#stopBtn {
+  min-width: 84px;
+  min-height: 50px;
+  padding: 11px 16px 12px;
+  border-radius: 999px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03) 34%, rgba(8, 10, 11, 0.1) 100%),
+    linear-gradient(180deg, rgba(33, 24, 24, 0.86), rgba(18, 12, 12, 0.92));
+  border: 1px solid rgba(185, 129, 123, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 -1px 0 rgba(0,0,0,0.16),
+    0 10px 24px rgba(0,0,0,0.22);
+  color: rgba(241, 231, 211, 0.92);
+}
+
+#stopBtn[hidden] {
+  display: none;
+}
+
+#stopBtn .kicker {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(241, 231, 211, 0.42);
+  font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-weight: 600;
+}
+
+#stopLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
+  font-family: "Avenir Next Condensed", "Segoe UI Variable", "Segoe UI", sans-serif;
+}
+
 body[data-face="idle"] #stateWord { color: var(--cream); }
 body[data-face="listening"] #stateWord { color: #d8bc88; }
 body[data-face="thinking"] #stateWord { color: #a7baae; }
@@ -353,6 +393,12 @@ body[data-face="error"] #stateWord { color: #b9817b; }
     min-height: 44px;
     padding: 10px 13px;
     border-radius: 999px;
+  }
+
+  #stopBtn {
+    min-width: 74px;
+    min-height: 44px;
+    padding: 10px 13px;
   }
 
   #micWrap {
@@ -413,14 +459,18 @@ body[data-face="error"] #stateWord { color: #b9817b; }
   }
 
   #bottomRail {
-    grid-template-columns: auto auto;
-    grid-template-areas: "mic mode";
+    grid-template-columns: auto auto auto;
+    grid-template-areas: "mic stop mode";
     justify-items: center;
     column-gap: 10px;
   }
 
   #modeBtn {
     grid-area: mode;
+  }
+
+  #stopBtn {
+    grid-area: stop;
   }
 
   #micWrap {
@@ -479,6 +529,11 @@ body[data-face="error"] #stateWord { color: #b9817b; }
         </button>
       </div>
 
+      <button type="button" id="stopBtn" class="glass" aria-label="Stop current operation" hidden>
+        <div class="kicker">Now</div>
+        <div id="stopLabel">Stop</div>
+      </button>
+
       <button type="button" id="modeBtn" class="glass" aria-label="Switch response mode">
         <div class="kicker">Mode</div>
         <div id="modeLabel">Fast</div>
@@ -492,6 +547,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const modeBtn = document.getElementById('modeBtn');
 const modeLabel = document.getElementById('modeLabel');
+const stopBtn = document.getElementById('stopBtn');
 const stateWord = document.getElementById('stateWord');
 const statusLine = document.getElementById('statusLine');
 const micWrap = document.getElementById('micWrap');
@@ -518,7 +574,7 @@ const STATUS_COPY = {
   },
   speaking: {
     word: 'Expressing',
-    mic: 'Tap to stop.',
+    mic: 'Tap stop to cancel.',
   },
   error: {
     word: 'Offline',
@@ -951,6 +1007,11 @@ let streamingMode = false;
 let voiceSocketSupported = true;
 let playbackQueue = Promise.resolve();
 let currentAudio = null;
+let currentAudioDone = null;
+let playbackGeneration = 0;
+let voiceRequestGeneration = 0;
+let activeVoiceRequestController = null;
+let suppressIncomingAudio = false;
 let audioCtx = null;
 let micSource = null;
 let playbackAnalyser = null;
@@ -1105,12 +1166,24 @@ function setMicRingLevel(level) {
   micLevelArc.style.strokeDashoffset = String(RING_LEN * (1 - clamp01(level)));
 }
 
+function operationActive() {
+  return micActive || micStarting || processing || Boolean(currentAudio);
+}
+
+function updateStopBtn() {
+  const active = operationActive();
+  stopBtn.hidden = !active;
+  stopBtn.disabled = !active;
+  stopBtn.setAttribute('aria-hidden', active ? 'false' : 'true');
+}
+
 function updateMicBtn() {
   if (micActive || micStarting) micBtn.classList.add('active');
   else micBtn.classList.remove('active');
   micWrap.classList.toggle('listening', micActive || micStarting);
   if (!micActive && micAvailable) setMicRingLevel(0);
   applyMicAvailability();
+  updateStopBtn();
 }
 
 function stopRecording() {
@@ -1148,32 +1221,47 @@ function stopRecording() {
     setAmplitude(0);
     if (state !== 'error') setState('idle');
   }
+  updateStopBtn();
 }
 
 function stopCurrentPlayback() {
+  playbackGeneration += 1;
   if (!currentAudio) return;
+  const done = currentAudioDone;
+  currentAudioDone = null;
   currentAudio.pause();
   currentAudio.currentTime = 0;
   disconnectPlaybackSource();
   currentAudio = null;
   setAmplitude(0);
+  if (done) done();
+  updateStopBtn();
 }
 
 function queueAudioPlayback(bytes, mime) {
+  const generation = playbackGeneration;
   playbackQueue = playbackQueue.then(function () {
     return new Promise(function (resolve) {
+      if (generation !== playbackGeneration) {
+        resolve();
+        return;
+      }
       const url = URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/mp3' }));
       const audio = new Audio(url);
       currentAudio = audio;
+      updateStopBtn();
       setState('speaking');
       attachPlaybackAnalyser(audio);
       const done = function () {
+        currentAudioDone = null;
         disconnectPlaybackSource();
         setAmplitude(0);
         URL.revokeObjectURL(url);
         if (currentAudio === audio) currentAudio = null;
+        updateStopBtn();
         resolve();
       };
+      currentAudioDone = done;
       audio.onended = done;
       audio.onerror = done;
       audio.onpause = function () {
@@ -1209,23 +1297,30 @@ async function encodeBlobBase64(blob) {
 }
 
 function handleVoiceEvent(msg) {
-  if (msg.type === 'session_ready') return;
+  if (msg.type === 'session_ready') {
+    suppressIncomingAudio = false;
+    return;
+  }
   if (msg.type === 'session_unavailable') {
     voiceSocketSupported = false;
     streamingMode = false;
     processing = false;
+    suppressIncomingAudio = false;
     closeVoiceSocket();
     if (micActive) setState('listening');
     return;
   }
   if (msg.type === 'transcript_partial' || msg.type === 'stt' || msg.type === 'transcript_final') return;
   if (msg.type === 'assistant_audio_chunk' || msg.type === 'audio') {
+    if (suppressIncomingAudio) return;
     queueAudioPlayback(Uint8Array.from(atob(msg.data), function (c) { return c.charCodeAt(0); }), msg.mime_type || 'audio/mp3');
     return;
   }
   if (msg.type === 'assistant_done' || msg.type === 'done') {
+    suppressIncomingAudio = false;
     playbackQueue.finally(function () {
-      setState('idle');
+      if (micActive) setState('listening');
+      else setState('idle');
       setAmplitude(0);
       processing = false;
       if (!micActive) closeVoiceSocket();
@@ -1233,14 +1328,17 @@ function handleVoiceEvent(msg) {
     return;
   }
   if (msg.type === 'cancelled') {
+    suppressIncomingAudio = false;
     stopCurrentPlayback();
-    setState('idle');
+    if (micActive) setState('listening');
+    else setState('idle');
     setAmplitude(0);
     processing = false;
     if (!micActive) closeVoiceSocket();
     return;
   }
   if (msg.type === 'error') {
+    suppressIncomingAudio = false;
     if (String(msg.detail || '').includes('HTTP 404')) {
       voiceSocketSupported = false;
       streamingMode = false;
@@ -1295,7 +1393,11 @@ function connectVoiceSocket() {
 }
 
 async function sendAudioToGateway(blob) {
+  const requestGeneration = voiceRequestGeneration;
+  const controller = new AbortController();
+  activeVoiceRequestController = controller;
   processing = true;
+  updateStopBtn();
   setState('thinking');
   setAmplitude(0);
   try {
@@ -1305,61 +1407,78 @@ async function sendAudioToGateway(blob) {
     const resp = await fetch('/v1/voice-proxy', {
       method: 'POST',
       headers: { 'x-voice-mode': currentMode || 'fast', 'x-conversation-id': conversationId },
+      signal: controller.signal,
       body: form,
     });
     if (!resp.ok) {
+      if (requestGeneration !== voiceRequestGeneration) return;
       setState('error');
       setTimeout(function () { setState('idle'); }, 2000);
       processing = false;
+      updateStopBtn();
       return;
     }
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
     while (true) {
+      if (requestGeneration !== voiceRequestGeneration) {
+        try { await reader.cancel(); } catch {}
+        return;
+      }
       const chunk = await reader.read();
       if (chunk.done) break;
       buf += dec.decode(chunk.value, { stream: true });
       const lines = buf.split('\n');
       buf = lines.pop();
       for (const line of lines) {
+        if (requestGeneration !== voiceRequestGeneration) {
+          try { await reader.cancel(); } catch {}
+          return;
+        }
         if (!line.trim()) continue;
         try {
           const msg = JSON.parse(line);
           if (msg.type === 'audio') {
             setState('speaking');
             const audioData = Uint8Array.from(atob(msg.data), function (c) { return c.charCodeAt(0); });
-            const url = URL.createObjectURL(new Blob([audioData], { type: 'audio/mp3' }));
-            const audio = new Audio(url);
-            await new Promise(function (resolve) {
-              audio.onended = resolve;
-              audio.onerror = resolve;
-              audio.play().catch(resolve);
-            });
-            URL.revokeObjectURL(url);
+            await queueAudioPlayback(audioData, 'audio/mp3');
           } else if (msg.type === 'error') {
+            if (requestGeneration !== voiceRequestGeneration) return;
             setState('error');
             setTimeout(function () { setState('idle'); }, 2000);
           }
         } catch {}
       }
     }
-  } catch {
+  } catch (error) {
+    if (requestGeneration !== voiceRequestGeneration || String(error && error.name || '') === 'AbortError') {
+      return;
+    }
     setState('error');
     setTimeout(function () { setState('idle'); }, 2000);
+  } finally {
+    if (activeVoiceRequestController === controller) activeVoiceRequestController = null;
   }
+  if (requestGeneration !== voiceRequestGeneration) return;
   setState('idle');
   setAmplitude(0);
   processing = false;
+  updateStopBtn();
 }
 
 async function startStreamingVoice() {
-  try {
-    await connectVoiceSocket();
+  suppressIncomingAudio = false;
+  if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
     streamingMode = true;
-  } catch (e) {
-    if (String(e && e.message || '').includes('404')) voiceSocketSupported = false;
-    streamingMode = false;
+  } else {
+    try {
+      await connectVoiceSocket();
+      streamingMode = true;
+    } catch (e) {
+      if (String(e && e.message || '').includes('404')) voiceSocketSupported = false;
+      streamingMode = false;
+    }
   }
   recordedChunks = [];
   pendingSpeechEnd = false;
@@ -1399,7 +1518,7 @@ async function startStreamingVoice() {
 }
 
 async function toggleMic() {
-  if (micStarting || (processing && !micActive)) return;
+  if (micStarting || processing || currentAudio) return;
   await refreshMicAvailability();
   if (!micAvailable) return;
   touchConversation();
@@ -1498,7 +1617,45 @@ async function toggleMic() {
     if (micActive) stopRecording();
   }, MAX_RECORDING_MS);
 }
+
+function cancelCurrentOperation() {
+  if (!operationActive()) return;
+  voiceRequestGeneration += 1;
+  suppressIncomingAudio = true;
+  recordedChunks = [];
+  pendingSpeechEnd = false;
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
+  if (activeVoiceRequestController) {
+    try { activeVoiceRequestController.abort(); } catch {}
+    activeVoiceRequestController = null;
+  }
+  const wsOpen = voiceSocket && voiceSocket.readyState === WebSocket.OPEN;
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    micActive = false;
+    barLoopRunning = false;
+    if (micLoopHandle) {
+      cancelAnimationFrame(micLoopHandle);
+      micLoopHandle = 0;
+    }
+    try { mediaRecorder.stop(); } catch {}
+  }
+  stopCurrentPlayback();
+  processing = false;
+  if (wsOpen) {
+    voiceSocket.send(JSON.stringify({ type: 'interrupt' }));
+  } else {
+    closeVoiceSocket();
+  }
+  setAmplitude(0);
+  setState('idle', true);
+  updateMicBtn();
+}
+
 micBtn.addEventListener('click', toggleMic);
+stopBtn.addEventListener('click', cancelCurrentOperation);
 window.addEventListener('focus', refreshMicAvailability);
 document.addEventListener('visibilitychange', function () {
   if (!document.hidden) refreshMicAvailability();
