@@ -462,3 +462,11 @@ That repo handles:
   <strong>🪷 Vritti</strong><br/>
   <em>Simple voice product for Raspberry Pi devices</em>
 </p>
+
+## 👥 Team
+
+| Member | GitHub |
+|---|---|
+| Krish | [@Thir13een](https://github.com/Thir13een) |
+| Shweta | [@shwetabankar54](https://github.com/shwetabankar54) |
+
