@@ -1,5 +1,3 @@
-[![Krish](https://img.shields.io/badge/Krish-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Thir13een) [![Shweta](https://img.shields.io/badge/Shweta-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shwetabankar54)
-
 <p align="center">
   <img src="assets/vritti-symbol.png" alt="Vritti" width="200" />
 </p>
@@ -9,6 +7,9 @@
   <strong>Voice AI for every Indian language</strong><br/>
   <em>Raspberry Pi on the edge. Gateway in the cloud. Fast voice in simple English.</em>
 </p>
+
+
+**🤝 Built by**   [![Krish](https://img.shields.io/badge/Krish-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Thir13een) [![Shweta](https://img.shields.io/badge/Shweta-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shwetabankar54)
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Raspberry%20Pi-c51a4a?style=for-the-badge&logo=raspberrypi&logoColor=white" alt="Raspberry Pi" />
